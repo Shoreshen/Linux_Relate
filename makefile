@@ -1,6 +1,3 @@
-
-clean:
-	-rm .vscode-ctags
 # GitHub ========================================================================================
 commit: clean
 	git add -A
@@ -9,3 +6,6 @@ commit: clean
 	git commit -m"$$comment"
 sync: commit
 	git push -u origin master
+# General ========================================================================================
+clean:
+	-rm .vscode-ctags
