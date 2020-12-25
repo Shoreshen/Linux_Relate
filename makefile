@@ -7,5 +7,5 @@ commit: clean
 sync: commit
 	git push -u origin master
 # General ========================================================================================
-clean:
+clean: 
 	-rm .vscode-ctags
