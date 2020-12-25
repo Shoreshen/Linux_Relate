@@ -8,4 +8,4 @@ sync: commit
 	git push -u origin master
 # General ========================================================================================
 clean: 
-	-rm .vscode-ctags
+	-make -C ./Driver clean
