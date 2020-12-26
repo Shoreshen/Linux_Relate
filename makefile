@@ -12,12 +12,11 @@ busy_clean:
 busybox/.config:
 	make -C ./busybox menuconfig
 busybox/_install: busybox/.config
-	docker run --rm -v `pwd`:/io manylinux-shore /bin/bash /io/busy_compile.sh
-	echo $(PW) | sudo -S chmod -Rf 777 busybox
+	docker run --rm  --user "$(id -u):$(id -g)" -v `pwd`:/io manylinux-shore /bin/bash /io/busy_compile.sh
 # GitHub =======================================================================================
-sub_pull:
+sub_init:
 	git submodule update --init --recursive
-sub_update:
+sub_pull:
 	git submodule foreach --recursive 'git pull origin master'
 commit: clean
 	git add -A
