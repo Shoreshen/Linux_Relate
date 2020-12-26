@@ -15,6 +15,10 @@ busybox/_install: busybox/.config
 	docker run --rm -v `pwd`:/io manylinux-shore /bin/bash /io/busy_compile.sh
 	echo $(PW) | sudo -S chmod -Rf 777 busybox
 # GitHub =======================================================================================
+sub_pull:
+	git submodule update --init --recursive
+sub_update:
+	git submodule foreach --recursive 'git pull origin master'
 commit: clean
 	git add -A
 	@echo "Please type in commit comment: "; \
