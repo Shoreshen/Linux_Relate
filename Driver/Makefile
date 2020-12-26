@@ -1,10 +1,10 @@
 # make file name has to be "Makefile"
 # need to install "base-devel" and kernel headers (e.g. "linux59-headers") packages
 
-# Base variable =========================================================================
+# User variable =========================================================================
 module_name = demo
 TEST_TRG = test
-# Extend variable =======================================================================
+# System variable =======================================================================
 DEV_PATH = /dev/$(module_name)
 obj-m = $(module_name).o
 KDIR  = /lib/modules/$(shell uname -r)/build
