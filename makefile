@@ -11,8 +11,9 @@ busy_clean:
 	-make -C ./busybox mrproper
 busybox/.config:
 	make -C ./busybox menuconfig
-busybox/_install: busybox/.config
+_install/linuxrc: busybox/.config
 	docker run --rm --user "$$(id -u):$$(id -g)" -v `pwd`:/io manylinux-shore /bin/bash /io/busy_compile.sh
+	cp -Rf busybox/_install/* _install
 # GitHub =======================================================================================
 sub_init:
 	git submodule update --init --recursive
@@ -26,5 +27,7 @@ commit: clean
 sync: commit
 	git push -u origin master
 # General ======================================================================================
-clean: linux_clean busy_clean
+clean:
+	cd _install && ls | grep -v "dev\|etc\|mnt" | xargs rm -rf
+	-rm -rf busybox/_install
 	-make -C ./Driver clean
