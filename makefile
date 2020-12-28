@@ -16,38 +16,38 @@ busybox/_install: busybox/.config
 	docker run --rm -v `pwd`:/io manylinux-shore sh -c "cd /io/busybox && make -j16 && make && make install"
 # filesys ======================================================================================
 _install:busybox/_install
-	mkdir _install
+	mkdir $@
 	cp -rf busybox/_install/* _install
-_install/dev:_install
+_install/dev:|_install
 	-mkdir $@
-_install/etc:_install
+_install/etc:|_install
 	-mkdir $@
-./_install/mnt:_install
+_install/mnt:|_install
 	-mkdir $@
-_install/etc/init.d:_install/etc
+_install/etc/init.d:|_install/etc
 	-mkdir -p $@
-_install/etc/fstab:_install/etc
+_install/etc/fstab:|_install/etc
 	touch $@
 	echo -e "proc  /proc proc  defaults 0 0\ntemps /tmp  rpoc  defaults 0 0\nnone  /tmp  ramfs defaults 0 0\nsysfs /sys  sysfs defaults 0 0\nmdev  /dev  ramfs defaults 0 0" > $@
-_install/etc/init.d/rcS:_install/etc/init.d
+_install/etc/init.d/rcS:|_install/etc/init.d
 	touch $@
 	echo -e "mkdir -p /proc\nmkdir -p /tmp\nmkdir -p /sys\nmkdir -p /mnt\n/bin/mount -a\nmkdir -p /dev/pts\nmount -t devpts devpts /dev/pts\necho /sbin/mdev > /proc/sys/kernel/hotplug\nmdev -s" > $@
 	chmod 755 $@
-_install/etc/inittab:_install/etc
+_install/etc/inittab:|_install/etc
 	touch $@
 	echo -e "::sysinit:/etc/init.d/rcS\n::respawn:-/bin/sh\n::askfirst:-/bin/sh\n::cttlaltdel:/bin/umount -a -r" > $@
 	chmod 755 $@
-_install/dev/console:_install/dev
+_install/dev/console:|_install/dev
 	-echo $(PW) | sudo -S mknod $@ c 5 1
-_install/dev/null:_install/dev
+_install/dev/null:|_install/dev
 	-echo $(PW) | sudo -S mknod $@ c 1 3
-_install/dev/tty1:_install/dev
+_install/dev/tty1:|_install/dev
 	-echo $(PW) | sudo -S mknod $@ c 4 1
 mnt:
 	mkdir mnt
-test: _install/dev/console
-	@echo $@
-rootfs.ext3: mnt ./_install/mnt _install/etc/fstab _install/etc/init.d/rcS _install/etc/inittab _install/dev/console _install/dev/null _install/dev/tty1
+test: mnt
+	touch test
+rootfs.ext3: mnt _install/etc/fstab _install/etc/init.d/rcS _install/etc/inittab _install/dev/console _install/dev/null _install/dev/tty1 |_install/mnt
 	-rm -rf rootfs.ext3
 	dd if=/dev/zero of=./rootfs.ext3 bs=1M count=32
 	mkfs.ext3 rootfs.ext3
