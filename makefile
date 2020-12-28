@@ -12,20 +12,18 @@ busy_clean:
 	echo $(PW) | sudo -S make -C ./busybox mrproper
 busybox/.config:
 	make -C ./busybox menuconfig
-busybox/_install: busybox/.config
-	docker run --rm -v `pwd`:/io manylinux-shore sh -c "cd /io/busybox && make -j16 && make && make install"
+_install: busybox busybox/.config
+	docker run --rm -v `pwd`:/io manylinux-shore sh -c "cd /io/busybox && make -j16 && make && make CONFIG_PREFIX=../_install  install"
+	echo $(PW) | sudo -S chmod -Rf 777 _install
 # filesys ======================================================================================
-_install:busybox/_install
-	mkdir $@
-	cp -rf busybox/_install/* _install
 _install/dev:|_install
-	-mkdir $@
+	mkdir $@
 _install/etc:|_install
-	-mkdir $@
+	mkdir $@
 _install/mnt:|_install
-	-mkdir $@
+	mkdir $@
 _install/etc/init.d:|_install/etc
-	-mkdir -p $@
+	mkdir -p $@
 _install/etc/fstab:|_install/etc
 	touch $@
 	echo -e "proc  /proc proc  defaults 0 0\ntemps /tmp  rpoc  defaults 0 0\nnone  /tmp  ramfs defaults 0 0\nsysfs /sys  sysfs defaults 0 0\nmdev  /dev  ramfs defaults 0 0" > $@
@@ -38,11 +36,11 @@ _install/etc/inittab:|_install/etc
 	echo -e "::sysinit:/etc/init.d/rcS\n::respawn:-/bin/sh\n::askfirst:-/bin/sh\n::cttlaltdel:/bin/umount -a -r" > $@
 	chmod 755 $@
 _install/dev/console:|_install/dev
-	-echo $(PW) | sudo -S mknod $@ c 5 1
+	echo $(PW) | sudo -S mknod $@ c 5 1
 _install/dev/null:|_install/dev
-	-echo $(PW) | sudo -S mknod $@ c 1 3
+	echo $(PW) | sudo -S mknod $@ c 1 3
 _install/dev/tty1:|_install/dev
-	-echo $(PW) | sudo -S mknod $@ c 4 1
+	echo $(PW) | sudo -S mknod $@ c 4 1
 mnt:
 	mkdir mnt
 test: mnt
@@ -76,4 +74,4 @@ sync: commit
 clean:
 	-rm -rf _install
 	-rm rootfs.ext3 rootfs.img.gz
-	#-make -C ./Driver clean
+	-make -C ./Driver clean
