@@ -36,6 +36,7 @@
         "iosfwd": "c",
         "ostream": "c",
         "stop_token": "c",
-        "streambuf": "c"
+        "streambuf": "c",
+        "ioctl.h": "c"
     }
 }
