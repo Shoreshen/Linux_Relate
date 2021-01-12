@@ -4,3 +4,6 @@
 [submodule "busybox"]
 	path = busybox
 	url = git@github.com:mirror/busybox.git
+[submodule "menu"]
+	path = menu
+	url = git@github.com:mengning/menu.git
