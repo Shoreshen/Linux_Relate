@@ -1,5 +1,11 @@
 PW     = $(shell cat ~/文档/PW)
-QFLAGS = -machine q35 -cpu EPYC -accel kvm -smp 4 -m 8G -serial stdio -S -s
+QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio
+MYFS_SRC_C = $(wildcard myfs/*.c)
+MYFS_SRC_H = $(wildcard myfs/*.h)
+run_busy: QMEUFL = $(QFLAGS) -accel kvm
+run_myfs: QMEUFL = $(QFLAGS) -accel kvm
+dbg_busy: QMEUFL = $(QFLAGS) -S -s
+dbg_myfs: QMEUFL = $(QFLAGS) -S -s
 # linux ========================================================================================
 linux_clean:
 	-make -C ./linux mrproper
@@ -44,8 +50,6 @@ _install/dev/tty1:|_install/dev
 	echo $(PW) | sudo -S mknod $@ c 4 1
 mnt:
 	mkdir mnt
-test: mnt
-	touch test
 rootfs.ext3: mnt _install/etc/fstab _install/etc/init.d/rcS _install/etc/inittab _install/dev/console _install/dev/null _install/dev/tty1 |_install/mnt
 	-rm -rf rootfs.ext3
 	dd if=/dev/zero of=./rootfs.ext3 bs=1M count=32
@@ -55,10 +59,20 @@ rootfs.ext3: mnt _install/etc/fstab _install/etc/init.d/rcS _install/etc/inittab
 	sudo umount mnt
 rootfs.img.gz:rootfs.ext3
 	gzip --best -c rootfs.ext3 > rootfs.img.gz
-
+# myfs =========================================================================================
+init: $(MYFS_SRC_C) $(MYFS_SRC_H)
+	gcc -static -o $@ $(MYFS_SRC_C)
+rootfs: init
+	echo init | cpio -o --format=newc > $@
 # qemu =========================================================================================
-run: linux/arch/x86/boot/bzImage rootfs.img.gz
-	qemu-system-x86_64 $(QFLAGS) -kernel $(word 1,$^) -initrd $(word 2,$^) -append "nokaslr" 
+run_busy: linux/arch/x86/boot/bzImage rootfs.img.gz
+	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^) 
+dbg_busy: linux/arch/x86/boot/bzImage rootfs.img.gz
+	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^) -append "nokaslr"
+run_myfs: linux/arch/x86/boot/bzImage rootfs
+	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^)
+dbg_myfs: linux/arch/x86/boot/bzImage rootfs
+	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^) -append "nokaslr"
 # GitHub =======================================================================================
 sub_init:
 	git submodule update --init --recursive
@@ -73,6 +87,6 @@ sync: commit
 	git push -u origin master
 # General ======================================================================================
 clean:
-	-rm -rf _install
-	-rm rootfs.ext3 rootfs.img.gz
+	-rm -rf _install init
+	-rm rootfs.ext3 rootfs.img.gz rootfs
 	-make -C ./Driver clean
