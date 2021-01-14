@@ -62,6 +62,8 @@ rootfs.img.gz:rootfs.ext3
 # myfs =========================================================================================
 init: $(MYFS_SRC_C) $(MYFS_SRC_H)
 	gcc -static -o $@ $(MYFS_SRC_C)
+initdbg: $(MYFS_SRC_C) $(MYFS_SRC_H)
+	gcc -static -g -o $@ $(MYFS_SRC_C)
 rootfs: init
 	echo init | cpio -o --format=newc > $@
 # qemu =========================================================================================

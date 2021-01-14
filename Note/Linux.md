@@ -69,6 +69,8 @@ The following clean all compiled files.
 ```shell
 make mrproper
 ```
+# Source Code
+
 
 # Rootfs
 
@@ -243,24 +245,25 @@ Add debug configuration in <code>launch.json</code>:
 
 ## qemu
 
-Run qemu with gdb support, simple sample is as follow:
+Adding gdb support by adding <code>-S -s</code>.
+
+Using Linux/Multiboot boot by specifying <code>-kernel,-initrd,-append</code> so that do not need to install it in the disk image.
+
+Sample:
 
 ```shell
-qemu-system-x86_64 -S -s -kernel arch/x86/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram init=/linuxrc" -serial file:output.txt
+qemu-system-x86_64 -S -s -kernel <bzImage> -initrd <file> -append <cmd>
 ```
 
 Parameters:
-1. <code>-kernel</code>: option providing bzImage as kernel drive without installing into target file system & partitions.
-2. <code>-S -s</code>: Setup support for GDB, default port is 1234
-3. <code>-initrd</code>: init process directory, which is location of the [rootfs](#rootfs)
-4. <code>-append</code>: parameters pass to kernel
-5. <code>-serial</code>: Kernel info output file location
+1. <code>-S -s</code>: Setup support for GDB, default port is 1234
+2. <code>-kernel</code>: Use \<bzImage\> as kernel image
+3. <code>-initrd</code>: Use \<file\> (compressed in specific format) used as initial ram disk
+4. <code>-append</code>: Use \<cmd\> as kernel command line
 
-Current complete run command for debugging qemu:
-
-```shell
-qemu-system-x86_64 -S -s -kernel arch/x86/boot/bzImage -initrd ./rootfs.img.gz -append "root=/dev/ram init=/linuxrc nokaslr" -serial file:output.txt -machine q35 -cpu EPYC -smp 4 -m 1G -device nvme,drive=D22,serial=1234 -drive file=nvme.disk,if=none,id=D22 -accel kvm
-```
+Please note:
+1. To debug, the accelerator should be turned off, thus do not put <code>-accel kvm</code> into the command
+2. To insert a break point, should either compile the kernel without <code>CONFIG_RANDOMIZE_BASE</code>, or add "nokaslar" to kernel command by using <code>-append</code>
 
 ## GDB
 
