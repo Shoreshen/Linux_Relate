@@ -1,5 +1,5 @@
 PW     = $(shell cat ~/文档/PW)
-QFLAGS = -machine q35 -cpu EPYC -accel kvm -smp 4 -m 8G -append "root=/dev/ram init=/linuxrc" -serial stdio
+QFLAGS = -machine q35 -cpu EPYC -accel kvm -smp 4 -m 8G -serial stdio -S -s
 # linux ========================================================================================
 linux_clean:
 	-make -C ./linux mrproper
@@ -58,7 +58,7 @@ rootfs.img.gz:rootfs.ext3
 
 # qemu =========================================================================================
 run: linux/arch/x86/boot/bzImage rootfs.img.gz
-	qemu-system-x86_64 $(QFLAGS) -kernel $(word 1,$^) -initrd $(word 2,$^)
+	qemu-system-x86_64 $(QFLAGS) -kernel $(word 1,$^) -initrd $(word 2,$^) -append "nokaslr" 
 # GitHub =======================================================================================
 sub_init:
 	git submodule update --init --recursive
