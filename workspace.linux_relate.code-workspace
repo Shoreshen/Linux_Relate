@@ -52,7 +52,10 @@
 			"ostream": "c",
 			"stop_token": "c",
 			"streambuf": "c",
-			"ioctl.h": "c"
+			"ioctl.h": "c",
+			"ctime": "c",
+			"limits": "c",
+			"numeric": "c"
 		}
 	}
 }

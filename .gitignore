@@ -1,3 +1,6 @@
 .vscode-ctags
 
 /busybox/_install
+GPATH
+GRTAGS
+GTAGS

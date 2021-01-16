@@ -2,13 +2,17 @@ PW     = $(shell cat ~/文档/PW)
 QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio
 MYFS_SRC_C = $(wildcard myfs/*.c)
 MYFS_SRC_H = $(wildcard myfs/*.h)
+CFLAGS = -static -g -o
 run_busy: QMEUFL = $(QFLAGS) -accel kvm
 run_myfs: QMEUFL = $(QFLAGS) -accel kvm
+run_myfs: CFLAGS = -static -o
 dbg_busy: QMEUFL = $(QFLAGS) -S -s
 dbg_myfs: QMEUFL = $(QFLAGS) -S -s
+dbg_myfs: CFLAGS = -static -g -o
 # linux ========================================================================================
 linux_clean:
 	-make -C ./linux mrproper
+	-make -C ./linux cleandocs
 linux/.config:
 	make -C ./linux ARCH=x86_64 menuconfig
 linux/arch/x86/boot/bzImage:linux/.config
@@ -61,9 +65,7 @@ rootfs.img.gz:rootfs.ext3
 	gzip --best -c rootfs.ext3 > rootfs.img.gz
 # myfs =========================================================================================
 init: $(MYFS_SRC_C) $(MYFS_SRC_H)
-	gcc -static -o $@ $(MYFS_SRC_C)
-initdbg: $(MYFS_SRC_C) $(MYFS_SRC_H)
-	gcc -static -g -o $@ $(MYFS_SRC_C)
+	gcc $(CFLAGS) $@ $(MYFS_SRC_C)
 rootfs: init
 	echo init | cpio -o --format=newc > $@
 # qemu =========================================================================================
@@ -89,6 +91,6 @@ sync: commit
 	git push -u origin master
 # General ======================================================================================
 clean:
-	-rm -rf _install init
+	-rm -rf _install init init.s
 	-rm rootfs.ext3 rootfs.img.gz rootfs
 	-make -C ./Driver clean

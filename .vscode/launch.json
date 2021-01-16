@@ -8,7 +8,7 @@
             "name": "init-debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/initdbg",
+            "program": "${workspaceFolder}/init",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
