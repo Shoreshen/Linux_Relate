@@ -91,6 +91,6 @@ sync: commit
 	git push -u origin master
 # General ======================================================================================
 clean:
-	-rm -rf _install init init.s
+	-rm -rf init init.s
 	-rm rootfs.ext3 rootfs.img.gz rootfs
 	-make -C ./Driver clean
