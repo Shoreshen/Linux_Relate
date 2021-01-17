@@ -1,5 +1,7 @@
 PW     = $(shell cat ~/文档/PW)
-QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio
+QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio -net nic -net user
+BUSY_BRANCH = $(shell cd busybox && git rev-parse --abbrev-ref HEAD)
+LINUX_BRANCH = $(shell cd linux && git rev-parse --abbrev-ref HEAD)
 MYFS_SRC_C = $(wildcard myfs/*.c)
 MYFS_SRC_H = $(wildcard myfs/*.h)
 CFLAGS = -static -g -o
@@ -9,6 +11,9 @@ run_myfs: CFLAGS = -static -o
 dbg_busy: QMEUFL = $(QFLAGS) -S -s
 dbg_myfs: QMEUFL = $(QFLAGS) -S -s
 dbg_myfs: CFLAGS = -static -g -o
+test:
+	@echo $(BUSY_BRANCH)
+	@echo $(LINUX_BRANCH)
 # linux ========================================================================================
 linux_clean:
 	-make -C ./linux mrproper
@@ -81,7 +86,9 @@ dbg_myfs: linux/arch/x86/boot/bzImage rootfs
 sub_init:
 	git submodule update --init --recursive
 sub_pull:
-	git submodule foreach --recursive 'git pull origin master'
+	cd busybox && git pull origin $(BUSY_BRANCH)
+	cd linux && git pull origin $(LINUX_BRANCH)
+	# git submodule foreach --recursive 'git pull origin master'
 commit: clean
 	git add -A
 	@echo "Please type in commit comment: "; \
