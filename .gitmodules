@@ -1,9 +1,12 @@
 [submodule "linux"]
 	path = linux
 	url = git@github.com:torvalds/linux.git
+	branch = master
 [submodule "busybox"]
 	path = busybox
 	url = git@github.com:mirror/busybox.git
+	branch = 1_32_stable
 [submodule "menu"]
 	path = menu
 	url = git@github.com:mengning/menu.git
+	branch = master

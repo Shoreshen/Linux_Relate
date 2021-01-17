@@ -2,6 +2,7 @@ PW     = $(shell cat ~/文档/PW)
 QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio -net nic -net user
 BUSY_BRANCH = $(shell cd busybox && git rev-parse --abbrev-ref HEAD)
 LINUX_BRANCH = $(shell cd linux && git rev-parse --abbrev-ref HEAD)
+MENU_BRANCH = $(shell cd menu && git rev-parse --abbrev-ref HEAD)
 MYFS_SRC_C = $(wildcard myfs/*.c)
 MYFS_SRC_H = $(wildcard myfs/*.h)
 CFLAGS = -static -g -o
