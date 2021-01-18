@@ -491,13 +491,16 @@ Run until the break point with <code>c</code> command, then switch to source lay
 #### View content
 
 1. <code>info r</code>: print registers(including segments)
-2. <code>x/nfu addr</code>: n = number, f = format(x=hex), u = len(g=8byte); example: x/16xg $rsp
+2. <code>x/nfu expression</code>: n = number, f = format(x=hex), u = len(g=8byte); 
+   1. <code>x/16xg $rsp</code>: display 16 of length 8 byte with hex format start at address pointed by rsp register
+   2. <code>x/16xg 0xffffffff82000210+(8* 201)</code>: display 16 of length 8 byte with hex format start at address of <code>0xffffffff82000858 = 0xffffffff82000210+(8*201) - 16</code>
 3. <code>info r</code>: print registers(including segments)
 4. <code>display /fmt expr</code>: display the value of "expr" each break with format "/fmt"
    1. <code>/x</code>: hex format
    2. <code>/c</code>: char format
    3. <code>/f</code>: float format
-5. <code>p /fmt expr</code>: view the value of "expr" with format "/fmt"
+5. <code>undisplay #No1 #No2...</code>: cancel display of expression <code>#No1 #No2...</code>
+6. <code>p /fmt expr</code>: view the value of "expr" with format "/fmt"
 
 #### Others
 

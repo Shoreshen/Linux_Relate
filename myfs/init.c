@@ -59,6 +59,7 @@ int time_handler(unsigned int argc, char **argv)
     time_t tt=0;
     struct tm *t=NULL;
     __asm__ __volatile__(
+        "mov $0,%%rdi\n\t"
         "mov $0xc9,%%rax\n\t"
         "syscall\n\t" 
         "mov %%rax,%0\n\t"  
@@ -66,7 +67,6 @@ int time_handler(unsigned int argc, char **argv)
         :
         :"rax"
     );
-    tt = time(NULL);
     t = localtime(&tt);
     printf("time:%d:%d:%d:%d:%d:%d\n",t->tm_year+1900, t->tm_mon, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
     return 0;
