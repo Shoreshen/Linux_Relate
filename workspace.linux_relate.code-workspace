@@ -56,6 +56,16 @@
 			"ctime": "c",
 			"limits": "c",
 			"numeric": "c"
-		}
+		},
+		"cSpell.words": [
+			"Blockdevices",
+			"Rootfs",
+			"busybox",
+			"endm",
+			"menuconfig",
+			"popsection",
+			"pushsection",
+			"struct"
+		]
 	}
 }

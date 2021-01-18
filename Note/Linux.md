@@ -16,7 +16,7 @@ Or use <code>menuconfig</code> (need to use xfce4-terminal, bash ):
 make ARCH=x86_64 menuconfig
 ```
 
-And process relavent option in the following graphic menu:
+And process relevant option in the following graphic menu:
 
 <img src="截图_2020-07-27_16-30-15.png">
 
@@ -28,10 +28,10 @@ Pick the following compiling options:
 
 1. <code>General setup -> Initial RAM filesystem and RAM disk support</code>
 2. <code>Device Drivers -> Blockdevices -> RAM block device support</code>, set "number=16" and "size=65536"
-3. <code>Kernel hacking -> Compile-times chekcs and compiler options -> Compile the kernel with debug info</code>
-4. <code>Kernel hacking -> Compile-times chekcs and compiler options -> Provide GDB scripts for kernel debugging</code>
+3. <code>Kernel hacking -> Compile-times checks and compiler options -> Compile the kernel with debug info</code>
+4. <code>Kernel hacking -> Compile-times checks and compiler options -> Provide GDB scripts for kernel debugging</code>
 
-For the supporting of ramdisk file system and debug.
+For the supporting of ram-disk file system and debug.
 
 ## Compile kernel
 
@@ -69,8 +69,138 @@ The following clean all compiled files.
 ```shell
 make mrproper
 ```
-# Source Code
+# GNU Assembly
 
+## macro
+
+By using commands <code>.macro</code> and <code>.endm</code> allow you to define macros that generate assembly output.
+
+<code>.macro *name* [*arg1*] [*arg2*] ...</code> defines a macro with name of *name* and several arguments.
+
+There are several attribute can be put on arguments:
+
+|Attribute|definition|
+|-|-|
+|arg:req|This argument require a non-blank value for this argument|
+|arg:vararg|This argument takes all of the remaining arguments|
+|arg=default|This argument has a default value|
+
+After finishing defining the macro, using <code>.endm</code> to indicate an end of definition.
+
+## Section
+
+Defined as block of bytes complied by as, which the size and order does not change in the following linking stage.
+
+Default 3 sections from GAS is text, data and bss. These sections can be empty. text section at address 0 of the object file, data and bss follows
+
+### linking section
+
+Without <code>*.lds</code> file present, linker will only deal with the following sections.
+
+|Section|Use|Storage|Accessability|
+|-|-|-|-|
+|Text | Used for storing executable code|Saved in the object file|readable but not writable|
+|Data | Used for storing data|Saved in the object file|readable & writable|
+|Bss |Used to store uninitialized global, static variables|Allocate at runtime|readable & writable|
+|Absolute|Address 0 of this section is always “relocated” to runtime address 0|||
+|Undefined|All address references to objects not in the preceding sections|||
+
+### as internal sections
+
+These sections are meant only for the internal use of **as** compiler.
+
+### Subsection
+
+A section could has subsection of 0~8192, which will re-ordered from lower to higher by **as** when creating obj files.
+
+This allow users to write discontinues source code and put them in continues address when creating obj file.
+
+The default subsection is 0, so if <code>.text</code> was used only, the code will be included in subsection of <code>.text 0</code>.
+
+Thus if no subsection is applied, all code will be compiled into subsection 0.
+
+*e.g: To declare subsection of <code>.text</code>, use numeric after section name such as <code>.text 1</code>*
+
+### ELF section stack manipulation directives
+
+Due to the [subsection](#subsection) mechanism, a conceptual section stack will be used to illustrate the operation of section.
+
+#### .previous
+
+This directive swaps the current section (and subsection) with most recently referenced section or subsection pair prior to this one. 
+
+e.g:
+
+```S
+.section A
+   .subsection 1
+      # Now in section A subsection 1
+      # Section stack: |A|A1|
+      .word 0x1234
+.section B
+   .subsection 0  
+      # Now in section B subsection 0
+      .word 0x5678
+   .subsection 1
+      # Now in section B subsection 1
+      .word 0x9abc
+.previous
+   # Now in section B subsection 0
+   .word 0xdef0
+```
+
+Above code will place 0x1234 into section A, 0x5678 and 0xdef0 into subsection 0 of section B and 0x9abc into subsection 1 of section B.
+
+#### .pushsection & .popsection
+
+<code>.pushsection *name* [,*subsection*] ["*flat*"]</code> save the current section and subsection to the top of section stack, and replace the current section and subsection with *name* and *subsection*.
+
+<code>.pushsection</code> replaces the current section and subsection with the top section and subsection on the section stack, then pop them out.
+
+##### Sample
+
+The following is ARM code:
+
+```c
+unsigned long ret;
+
+asm volatile(
+   "1: ldr %0,[%1]\n"
+   "2:\n"
+   ".pushsection .text.fixup, \"ax\"\n"
+   "3b\n"
+   "mov %0, $0x89\n"
+   "b 2b\n"
+   ".popsection\n"
+   ".pushsection __ex_table, \"ax\"\n"
+   ".long 1b, 3b\n"
+   ".popsection\n"
+   :"=&r"(ret)
+   :"r"(addr)
+);
+```
+###### Target & background
+
+The purpose of this code is to test if <code>addr</code> is a valid aligned. If yes, then return the value addr pointed at, if not, return 0x89.
+
+ARM generate an interrupt for non aligned instruction, then interrupt handler will search an specific array with the following structure:
+
+```c
+struct exception_table_entry
+{
+   unsigned long insn, fixup;
+}
+```
+
+<code>insn</code> is the address of instruction cause interrupt, <code>fixup</code> is the pointer of code that if <code>insn</code> interrupt is generated.
+
+###### Analyze of code
+
+The body of code is <code>ldr %0,[%1]</code> it simply load the value pointed by argument 1 (which is <code>addr</code>) into argument 0 (which is <code>ret</code>). If the <code>addr</code> is not an aligned address, interrupt is generated.
+
+Interrupt handler will scan <code>exception_table_entry</code>, which located in section <code>__ex_table</code>, thus using <code>.pushsection</code> switch to define an entry as <code>.long 1b, 3b</code> with <code>insn</code> pointing to the body of code and <code>fixup</code> pointing to the process of fixup, and using <code>.popsection</code> to switch back to the current section.
+
+Fixup at symbol <code>3b</code> also should be placed in specific section named <code>.text.fixup</code>. Same as above with the combined using of <code>.pushsection</code> and <code>.popsection</code> to insert fixup code into the target section, even if the source code is in here.
 
 # Rootfs
 
@@ -115,7 +245,7 @@ sudo chown shore ./_install #change owner of the file so that user can manipulat
 
 Since we do not save the container, each time will need update and install <code>glibc-static</code>.
 
-By defualt, the installation destination will by <code>./_install</code> 
+By default, the installation destination will by <code>./_install</code> 
 
 ## Extra file/dirs
 
@@ -329,6 +459,38 @@ Run until the break point with <code>c</code> command, then switch to source lay
 4. <code>bt</code>: view calling stack(trace caller of the function)
 
 # Source code
+
+## ALTERNATIVE
+
+This is an [GAS macro](#macro), located in <code>arch/x86/include/asm/alternative-asm.h:54</code>. Source code is as follow:
+
+```c
+/*
+ * Define an alternative between two instructions. If @feature is
+ * present, early code in apply_alternatives() replaces @oldinstr with
+ * @newinstr. ".skip" directive takes care of proper instruction padding
+ * in case @newinstr is longer than @oldinstr.
+ */
+.macro ALTERNATIVE oldinstr, newinstr, feature
+140:
+	\oldinstr
+141:
+	.skip -(((144f-143f)-(141b-140b)) > 0) * ((144f-143f)-(141b-140b)),0x90
+142:
+
+	.pushsection .altinstructions,"a"
+	altinstruction_entry 140b,143f,\feature,142b-140b,144f-143f,142b-141b
+	.popsection
+
+	.pushsection .altinstr_replacement,"ax"
+143:
+	\newinstr
+144:
+	.popsection
+.endm
+```
+
+
 
 ## __raw_cmpxchg(ptr, old, new, size, lock)
 

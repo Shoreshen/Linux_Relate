@@ -87,9 +87,9 @@ dbg_myfs: linux/arch/x86/boot/bzImage rootfs
 sub_init:
 	git submodule update --init --recursive
 sub_pull:
-	cd busybox && git pull origin $(BUSY_BRANCH)
-	cd linux && git pull origin $(LINUX_BRANCH)
-	# git submodule foreach --recursive 'git pull origin master'
+	# cd busybox && git pull origin $(BUSY_BRANCH)
+	# cd linux && git pull origin $(LINUX_BRANCH)
+	git submodule foreach --recursive 'git pull origin'
 commit: clean
 	git add -A
 	@echo "Please type in commit comment: "; \
