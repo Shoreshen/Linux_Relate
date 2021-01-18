@@ -1,5 +1,7 @@
 [TOC]
 
+current mark: 4
+
 # Kernel
 
 ## Create config file
@@ -69,7 +71,31 @@ The following clean all compiled files.
 ```shell
 make mrproper
 ```
+
 # GNU Assembly
+
+## Operators
+
+### Infix
+
+|Operator|Priority|Functionality|
+|-|-|-|
+|*|High|Multiplication|
+|/|High|Division|
+|%|High|Reminder|
+|>>|High|Shift right|
+|<<|High|Shift left|
+|\||median|Bitwise or|
+|&|median|Bitwise and|
+|^|median|Bitwise xor|
+|!|median|Bitwise or not|
+|+|low|Addition|
+|==|low|Equal, return -1 if true, 0 otherwise|
+|!=|low|Not equal, return -1 if true, 0 otherwise|
+|>|low|Greater than, return -1 if true, 0 otherwise|
+|<|low|Less than, return -1 if true, 0 otherwise|
+|>=|low|Greater than or equal, return -1 if true, 0 otherwise|
+|<=|low|Less then or equal, return -1 if true, 0 otherwise|
 
 ## macro
 
@@ -85,6 +111,8 @@ There are several attribute can be put on arguments:
 |arg:vararg|This argument takes all of the remaining arguments|
 |arg=default|This argument has a default value|
 
+Argument <code>arg</code> can be referenced as <code>\arg</code> inside the macro definition.
+
 After finishing defining the macro, using <code>.endm</code> to indicate an end of definition.
 
 ## Section
@@ -92,6 +120,22 @@ After finishing defining the macro, using <code>.endm</code> to indicate an end 
 Defined as block of bytes complied by as, which the size and order does not change in the following linking stage.
 
 Default 3 sections from GAS is text, data and bss. These sections can be empty. text section at address 0 of the object file, data and bss follows
+
+### Section attribute
+
+For ELF format, the following flags can be set:
+
+|Flag|Meaning|
+|-|-|
+|a|section is allocatable|
+|d|section is a GNU MBIND section|
+|e|section is excluded from executable and shared library.|
+|w|section is writable|
+|x|section is executable|
+|M|section is mergeable|
+|S|section contains zero terminated strings|
+|G|section is a member of a section group|
+|T|section is used for thread-local-storage|
 
 ### linking section
 
@@ -201,6 +245,12 @@ The body of code is <code>ldr %0,[%1]</code> it simply load the value pointed by
 Interrupt handler will scan <code>exception_table_entry</code>, which located in section <code>__ex_table</code>, thus using <code>.pushsection</code> switch to define an entry as <code>.long 1b, 3b</code> with <code>insn</code> pointing to the body of code and <code>fixup</code> pointing to the process of fixup, and using <code>.popsection</code> to switch back to the current section.
 
 Fixup at symbol <code>3b</code> also should be placed in specific section named <code>.text.fixup</code>. Same as above with the combined using of <code>.pushsection</code> and <code>.popsection</code> to insert fixup code into the target section, even if the source code is in here.
+
+## Other directive
+
+### .skip/.space
+
+<code>.skip *size*, *fill*</code> is the same as <code>.space *size*, *fill*</code>, which filling the following *size* byte with *fill* value.
 
 # Rootfs
 
@@ -490,7 +540,162 @@ This is an [GAS macro](#macro), located in <code>arch/x86/include/asm/alternativ
 .endm
 ```
 
+### Analyze
 
+#### ALTERNATIVE
+
+The body of macro is <code>oldinstr+skip pad</code>. And if the <code>feature</code> argument has specific bit set, then will replace <code>oldinstr</code> with <code>newinstr</code>. So that system can auto adjust best code for specific situation (e.g: select best code for different type of CPU). The following will illustrate some of the code to make the whole picture:
+
+<a id = "bkmk4"></a>```c
+.skip -(((144f-143f)-(141b-140b)) > 0) * ((144f-143f)-(141b-140b)),0x90
+```
+
+According to [operator](#infix) that the operator of <code>></code> will return $-1$ if true, $0$ otherwise. Thus if the <code>len(newinstr)>len(oldinstr)</code> the <code>-(((144f-143f)-(141b-140b)) > 0)=-(-1)=1</code>, then this code will add <code>0x90</code>(No operation) instruction for the rest of length.
+
+```c
+.pushsection .altinstructions,"a"
+altinstruction_entry 140b,143f,\feature,142b-140b,144f-143f,142b-141b
+.popsection
+```
+
+This piece of code switch to <code>.altinstructions</code> section and using [altinstruction_entry](#bkmk3) macro to create an [struct alt_instr]($bkmk1) structure. Then switch back to the current section.
+
+```c
+.pushsection .altinstr_replacement,"ax"
+\newinstr
+.popsection
+```
+
+This piece of code save <code>newinstr</code> in a special section named <code>.altinstr_replacement</code>.
+
+#### apply_alternatives()
+
+After the above preparation, kernel will call <code>apply_alternatives</code> function to replace the relative string. It's located and code are as [follow](#bkmk2).
+
+The function will scan from <code>start</code> to <code>end</code> of section <code>.altinstructions</code> And replace the instructions according to <code>(struct alt_instr *)a->cpuid</code> value. The next content of this chapter will analyze some of the code to illustrate the replacing mechanism:
+
+```c
+if (!boot_cpu_has(a->cpuid)) {
+   if (a->padlen > 1)
+      optimize_nops(a, instr);
+
+   continue;
+}
+```
+
+<code>boot_cpu_has(a->cpuid)</code> macro check if the cpu has specific target bit set. If yes, replace the old instruction. Otherwise use <code>optimize_nops()</code> to clear the <code>0x90</code>(No operation) instruction created by [previous instruction](#bkmk4).
+
+```c
+memcpy(insn_buff, replacement, a->replacementlen);
+```
+
+This piece of code replace the old instruction with the new instruction.
+
+The rest of code doing 2 things:
+1. Resolve the relative <code>jmp</code> (machine code <code>0xe8</code>) address
+2. Add <code>0x90</code>(No operation) instruction if old instruction is longer than new instruction.
+
+### Other reference
+
+<a id = "bkmk1">struct alt_instr</a> structure in file <code>linux/arch/x86/include/asm/alternative.h:58</code>:
+
+```c
+struct alt_instr {
+	s32 instr_offset;    /* original instruction */
+	s32 repl_offset;     /* offset to replacement instruction */
+	u16 cpuid;           /* cpuid bit set for replacement */
+	u8  instrlen;        /* length of original instruction */
+	u8  replacementlen;  /* length of new instruction */
+	u8  padlen;          /* length of build-time padding */
+} __packed;
+```
+
+<a id = "bkmk2">apply_alternatives</a> function in file <code>arch/x86/kernel/alternative.c:372</code>
+
+```c
+void __init_or_module noinline apply_alternatives(struct alt_instr *start,
+						  struct alt_instr *end)
+{
+	struct alt_instr *a;
+	u8 *instr, *replacement;
+	u8 insn_buff[MAX_PATCH_LEN];
+
+	DPRINTK("alt table %px, -> %px", start, end);
+	/*
+	 * The scan order should be from start to end. A later scanned
+	 * alternative code can overwrite previously scanned alternative code.
+	 * Some kernel functions (e.g. memcpy, memset, etc) use this order to
+	 * patch code.
+	 *
+	 * So be careful if you want to change the scan order to any other
+	 * order.
+	 */
+	for (a = start; a < end; a++) {
+		int insn_buff_sz = 0;
+
+		instr = (u8 *)&a->instr_offset + a->instr_offset;
+		replacement = (u8 *)&a->repl_offset + a->repl_offset;
+		BUG_ON(a->instrlen > sizeof(insn_buff));
+		BUG_ON(a->cpuid >= (NCAPINTS + NBUGINTS) * 32);
+		if (!boot_cpu_has(a->cpuid)) {
+			if (a->padlen > 1)
+				optimize_nops(a, instr);
+
+			continue;
+		}
+
+		DPRINTK("feat: %d*32+%d, old: (%pS (%px) len: %d), repl: (%px, len: %d), pad: %d",
+			a->cpuid >> 5,
+			a->cpuid & 0x1f,
+			instr, instr, a->instrlen,
+			replacement, a->replacementlen, a->padlen);
+
+		DUMP_BYTES(instr, a->instrlen, "%px: old_insn: ", instr);
+		DUMP_BYTES(replacement, a->replacementlen, "%px: rpl_insn: ", replacement);
+
+		memcpy(insn_buff, replacement, a->replacementlen);
+		insn_buff_sz = a->replacementlen;
+
+		/*
+		 * 0xe8 is a relative jump; fix the offset.
+		 *
+		 * Instruction length is checked before the opcode to avoid
+		 * accessing uninitialized bytes for zero-length replacements.
+		 */
+		if (a->replacementlen == 5 && *insn_buff == 0xe8) {
+			*(s32 *)(insn_buff + 1) += replacement - instr;
+			DPRINTK("Fix CALL offset: 0x%x, CALL 0x%lx",
+				*(s32 *)(insn_buff + 1),
+				(unsigned long)instr + *(s32 *)(insn_buff + 1) + 5);
+		}
+
+		if (a->replacementlen && is_jmp(replacement[0]))
+			recompute_jump(a, instr, replacement, insn_buff);
+
+		if (a->instrlen > a->replacementlen) {
+			add_nops(insn_buff + a->replacementlen,
+				 a->instrlen - a->replacementlen);
+			insn_buff_sz += a->instrlen - a->replacementlen;
+		}
+		DUMP_BYTES(insn_buff, insn_buff_sz, "%px: final_insn: ", instr);
+
+		text_poke_early(instr, insn_buff, insn_buff_sz);
+	}
+}
+```
+
+<a id = "bkmk3">altinstruction_entry</a> macro in file <code>arch/x86/include/asm/alternative-asm.h:39</code>:
+
+```c
+.macro altinstruction_entry orig alt feature orig_len alt_len pad_len
+	.long \orig - .
+	.long \alt - .
+	.word \feature
+	.byte \orig_len
+	.byte \alt_len
+	.byte \pad_len
+.endm
+```
 
 ## __raw_cmpxchg(ptr, old, new, size, lock)
 
