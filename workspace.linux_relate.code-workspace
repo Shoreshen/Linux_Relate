@@ -59,13 +59,16 @@
 		},
 		"cSpell.words": [
 			"Blockdevices",
+			"Qemu",
 			"Rootfs",
 			"busybox",
 			"endm",
 			"menuconfig",
 			"popsection",
 			"pushsection",
-			"struct"
-		]
+			"struct",
+			"syscall"
+		],
+		"cSpell.enabled": true
 	}
 }

@@ -1,6 +1,6 @@
 [TOC]
 
-current mark: 4
+current mark: 7
 
 # Kernel
 
@@ -378,15 +378,15 @@ gzip --best -c rootfs.ext3 > rootfs.img.gz
 
 # Debug
 
-To make it able to debug, need to select [relavent option](#debug-using-gdb) in the config file.
+To make it able to debug, need to select [relevant option](#debug-using-gdb) in the config file.
 
 ## Compiler optimization
 
-It is said that the code is written based on assuptiom of "-O2" compiler option.
+It is said that the code is written based on assumption of "-O2" compiler option.
 
 So simply turnoff optimization will cause crash of the whole compilation.
 
-However, it might be possible to add attributo to specific function:
+However, it might be possible to add attribute to specific function:
 
 ```c
 void __attribute__((optimize("O0"))) foo(unsigned char data) {
@@ -513,6 +513,531 @@ Run until the break point with <code>c</code> command, then switch to source lay
 
 # Source code
 
+## System call
+### Defining system call function
+
+Using a special function as in <code>kernel/time/time.c:62</code> with the following source code to illustrate:
+
+```c
+SYSCALL_DEFINE1(time, __kernel_old_time_t __user *, tloc)
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+#### Find out exact expression of function
+
+According to the following macro definition:
+
+```c
+// include/linux/syscalls.h:213
+#define SYSCALL_DEFINE1(name, ...) SYSCALL_DEFINEx(1, _##name, __VA_ARGS__)
+#define SYSCALL_DEFINE2(name, ...) SYSCALL_DEFINEx(2, _##name, __VA_ARGS__)
+#define SYSCALL_DEFINE3(name, ...) SYSCALL_DEFINEx(3, _##name, __VA_ARGS__)
+#define SYSCALL_DEFINE4(name, ...) SYSCALL_DEFINEx(4, _##name, __VA_ARGS__)
+#define SYSCALL_DEFINE5(name, ...) SYSCALL_DEFINEx(5, _##name, __VA_ARGS__)
+#define SYSCALL_DEFINE6(name, ...) SYSCALL_DEFINEx(6, _##name, __VA_ARGS__)
+
+#define SYSCALL_DEFINE_MAXARGS	6
+
+#define SYSCALL_DEFINEx(x, sname, ...)				\
+	SYSCALL_METADATA(sname, x, __VA_ARGS__)			\
+	__SYSCALL_DEFINEx(x, sname, __VA_ARGS__)
+
+// include/linux/syscalls.h:197
+#define SYSCALL_METADATA(sname, nb, ...)
+```
+
+We transform the code into the following
+
+```c
+__SYSCALL_DEFINEx(1, _time, __kernel_old_time_t __user *, tloc)
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+According to the following macro definition:
+
+```c
+// arch/x86/include/asm/syscall_wrapper.h:74
+#define __SYS_STUBx(abi, name, ...)					\
+	long __##abi##_##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__##abi##_##name, ERRNO);			\
+	long __##abi##_##name(const struct pt_regs *regs)		\
+	{								\
+		return __se_##name(__VA_ARGS__);			\
+	}
+
+// arch/x86/include/asm/syscall_wrapper.h:95
+#define __X64_SYS_STUBx(x, name, ...)					\
+	__SYS_STUBx(x64, sys##name,					\
+		    SC_X86_64_REGS_TO_ARGS(x, __VA_ARGS__))
+
+// arch/x86/include/asm/syscall_wrapper.h:126
+#define __IA32_SYS_STUBx(x, name, ...)
+
+// arch/x86/include/asm/syscall_wrapper.h:227
+#define __SYSCALL_DEFINEx(x, name, ...)					\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__));	\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__));\
+	__X64_SYS_STUBx(x, name, __VA_ARGS__)				\
+	__IA32_SYS_STUBx(x, name, __VA_ARGS__)				\
+	static long __se_sys##name(__MAP(x,__SC_LONG,__VA_ARGS__))	\
+	{								\
+		long ret = __do_sys##name(__MAP(x,__SC_CAST,__VA_ARGS__));\
+		__MAP(x,__SC_TEST,__VA_ARGS__);				\
+		__PROTECT(x, ret,__MAP(x,__SC_ARGS,__VA_ARGS__));	\
+		return ret;						\
+	}								\
+	static inline long __do_sys##name(__MAP(x,__SC_DECL,__VA_ARGS__))
+```
+
+Transform the code into following:
+
+```c
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)); 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc)); 
+__X64_SYS_STUBx(1, _time, __kernel_old_time_t __user *, tloc) 
+__IA32_SYS_STUBx(1, _time, __kernel_old_time_t __user *, tloc) 
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)) 
+{ 
+	long ret = __do_sys_time(__MAP(1,__SC_CAST,__kernel_old_time_t __user *, tloc)); 
+	__MAP(1,__SC_TEST,__kernel_old_time_t __user *, tloc); 
+	__PROTECT(1, ret,__MAP(1,__SC_ARGS,__kernel_old_time_t __user *, tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc))
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+According to following macro definition:
+
+```c
+// arch/x86/include/asm/syscall_wrapper.h:74
+#define __SYS_STUBx(abi, name, ...)					\
+	long __##abi##_##name(const struct pt_regs *regs);		\
+	ALLOW_ERROR_INJECTION(__##abi##_##name, ERRNO);			\
+	long __##abi##_##name(const struct pt_regs *regs)		\
+	{								\
+		return __se_##name(__VA_ARGS__);			\
+	}
+
+// arch/x86/include/asm/syscall_wrapper.h:95
+#define __X64_SYS_STUBx(x, name, ...)					\
+	__SYS_STUBx(x64, sys##name,					\
+		    SC_X86_64_REGS_TO_ARGS(x, __VA_ARGS__))
+
+// arch/x86/include/asm/syscall_wrapper.h:126
+#define __IA32_SYS_STUBx(x, name, ...)
+```
+
+Thus we eleminate IA32 entry of system call and get the following tranformed code:
+
+```c
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)); 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc)); 
+long __x64_sys_time(const struct pt_regs *regs); 
+ALLOW_ERROR_INJECTION(__x64_sys_time, ERRNO); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(SC_X86_64_REGS_TO_ARGS(1, __kernel_old_time_t __user *, tloc)); 
+}
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)) 
+{ 
+	long ret = __do_sys_time(__MAP(1,__SC_CAST,__kernel_old_time_t __user *, tloc)); 
+	__MAP(1,__SC_TEST,__kernel_old_time_t __user *, tloc); 
+	__PROTECT(1, ret,__MAP(1,__SC_ARGS,__kernel_old_time_t __user *, tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc))
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+For now we ignore some error and protection mechanism, so the final code we gonna analyze is as follow
+
+```c
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)); 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc)); 
+long __x64_sys_time(const struct pt_regs *regs); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(SC_X86_64_REGS_TO_ARGS(1, __kernel_old_time_t __user *, tloc)); 
+}
+static long __se_sys_time(__MAP(1,__SC_LONG,__kernel_old_time_t __user *, tloc)) 
+{ 
+	long ret = __do_sys_time(__MAP(1,__SC_CAST,__kernel_old_time_t __user *, tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__MAP(1,__SC_DECL,__kernel_old_time_t __user *, tloc))
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+#### Deal with parameters
+
+##### Mapping macros
+
+According to following macro definition
+<a id='bkmk5'></a>
+```c
+// include/linux/syscalls.h:106
+#define __MAP0(m,...)
+#define __MAP1(m,t,a,...) m(t,a)
+#define __MAP2(m,t,a,...) m(t,a), __MAP1(m,__VA_ARGS__)
+#define __MAP3(m,t,a,...) m(t,a), __MAP2(m,__VA_ARGS__)
+#define __MAP4(m,t,a,...) m(t,a), __MAP3(m,__VA_ARGS__)
+#define __MAP5(m,t,a,...) m(t,a), __MAP4(m,__VA_ARGS__)
+#define __MAP6(m,t,a,...) m(t,a), __MAP5(m,__VA_ARGS__)
+#define __MAP(n,...) __MAP##n(__VA_ARGS__)
+```
+
+Thus we replace all the <code>__MAP</code> macro:
+
+```c
+static long __se_sys_time(__SC_LONG(__kernel_old_time_t __user *,tloc)); 
+static inline long __do_sys_time(__SC_DECL(__kernel_old_time_t __user *,tloc)); 
+long __x64_sys_time(const struct pt_regs *regs); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(SC_X86_64_REGS_TO_ARGS(1, __kernel_old_time_t __user *, tloc)); 
+}
+static long __se_sys_time(__SC_LONG(__kernel_old_time_t __user *,tloc)) 
+{ 
+	long ret = __do_sys_time(__SC_CAST(__kernel_old_time_t __user *,tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__SC_DECL(__kernel_old_time_t __user *, tloc))
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+Step by step, next we find the following macro definition:
+
+<a id='bkmk6'></a>
+```c
+// include/linux/syscalls.h:115
+#define __SC_DECL(t, a)	t a
+#define __TYPE_AS(t, v)	__same_type((__force t)0, v)
+#define __TYPE_IS_L(t)	(__TYPE_AS(t, 0L))
+#define __TYPE_IS_UL(t)	(__TYPE_AS(t, 0UL))
+#define __TYPE_IS_LL(t) (__TYPE_AS(t, 0LL) || __TYPE_AS(t, 0ULL))
+#define __SC_LONG(t, a) __typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)) a
+#define __SC_CAST(t, a)	(__force t) a
+#define __SC_ARGS(t, a)	a
+#define __SC_TEST(t, a) (void)BUILD_BUG_ON_ZERO(!__TYPE_IS_LL(t) && sizeof(t) > sizeof(long))
+
+// include/linux/compiler_types.h:256
+#define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
+
+// include/linux/compiler_types.h:50
+#define __force
+```
+
+We then furthur explan our code by macros defined above:
+
+```c
+static long __se_sys_time(
+	__typeof(__builtin_choose_expr(
+		__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0LL)) ||
+		__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0ULL))
+		, 0LL, 0L
+	)) tloc
+); 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc); 
+long __x64_sys_time(const struct pt_regs *regs); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(SC_X86_64_REGS_TO_ARGS(1, __kernel_old_time_t __user *, tloc)); 
+}
+static long __se_sys_time(
+	__typeof(__builtin_choose_expr(
+		__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0LL)) ||
+		__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0ULL))
+		, 0LL, 0L
+	)) tloc
+) 
+{ 
+	long ret = __do_sys_time((__kernel_old_time_t __user *) tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+According to [this post](https://stackoverflow.com/questions/14877415/difference-between-typeof-typeof-and-typeof-in-objective-c#:~:text=3%20Answers&text=__typeof__()%20and%20__typeof,not%20include%20such%20an%20operator.&text=typeof()%20is%20exactly%20the,every%20modern%20compiler%20supports%20it.) it is equivalent for <code>typedef</code>, <code>__typedef</code> and <code>_\_typedef\_\_</code>.
+
+Further we import 2 compiler build in function:
+1. <code>int __builtin_types_compatible_p(type1, type2)</code> return 1 if type1 is same as type2.
+2. <code>type __builtin_choose_expr(const_exp,exp1,exp2)</code> return <code>exp1</code> if <code>const_exp</code> is none zero, <code>exp2</code> otherwise.
+
+Now the problem would be to figure out the type of <code>__kernel_old_time_t __user *</code>, thus we found the following definition:
+
+```c
+// include/uapi/asm-generic/posix_types.h:89
+typedef __kernel_long_t	__kernel_old_time_t;
+
+// include/uapi/asm-generic/posix_types.h:15
+typedef long		__kernel_long_t;
+```
+
+Thus we know that <code>__kernel_old_time_t __user *</code> is equivalent to <code>long *</code>, it neither a <code>long long</code> type nor a <code>unsigned long long</code> type. Therefore, for the following expression:
+
+```c
+__typeof(__builtin_choose_expr(
+	__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0LL)) ||
+	__builtin_types_compatible_p(typeof((__kernel_old_time_t __user *)0), typeof(0ULL))
+	, 0LL, 0L
+))
+```
+
+Will be valued as <code>typeof(0L)=long</code>, so in this stage we can display the function as follow:
+
+```c
+static long __se_sys_time(long tloc); 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc); 
+long __x64_sys_time(const struct pt_regs *regs); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(SC_X86_64_REGS_TO_ARGS(1, __kernel_old_time_t __user *, tloc)); 
+}
+static long __se_sys_time(long tloc) 
+{ 
+	long ret = __do_sys_time((__kernel_old_time_t __user *) tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+##### Passing parameter
+
+According to following macro definition:
+
+```c
+// arch/x86/include/asm/syscall_wrapper.h:56
+#define SC_X86_64_REGS_TO_ARGS(x, ...)					\
+	__MAP(x,__SC_ARGS						\
+		,,regs->di,,regs->si,,regs->dx				\
+		,,regs->r10,,regs->r8,,regs->r9)			\
+
+// arch/x86/include/asm/ptrace.h:56
+struct pt_regs {
+/*
+ * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
+ * unless syscall needs a complete, fully filled "struct pt_regs".
+ */
+	unsigned long r15;
+	unsigned long r14;
+	unsigned long r13;
+	unsigned long r12;
+	unsigned long bp;
+	unsigned long bx;
+/* These regs are callee-clobbered. Always saved on kernel entry. */
+	unsigned long r11;
+	unsigned long r10;
+	unsigned long r9;
+	unsigned long r8;
+	unsigned long ax;
+	unsigned long cx;
+	unsigned long dx;
+	unsigned long si;
+	unsigned long di;
+/*
+ * On syscall entry, this is syscall#. On CPU exception, this is error code.
+ * On hw interrupt, it's IRQ number:
+ */
+	unsigned long orig_ax;
+/* Return frame for iretq */
+	unsigned long ip;
+	unsigned long cs;
+	unsigned long flags;
+	unsigned long sp;
+	unsigned long ss;
+/* top of stack page */
+};
+```
+
+According to [MAPPING](#bkmk5) and [SC](#bkmk6) definition we find that only the first argument make effect in this macro, and finally we present the comprehensive definition of time system call function.
+<a id='bkmk7'></a>
+```c
+static long __se_sys_time(long tloc); 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc); 
+long __x64_sys_time(const struct pt_regs *regs); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+	return __se_sys_time(regs->di); 
+}
+static long __se_sys_time(long tloc) 
+{ 
+	long ret = __do_sys_time((__kernel_old_time_t __user *) tloc)); 
+	return ret; 
+} 
+static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
+{
+	__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+	if (tloc) {
+		if (put_user(i,tloc))
+			return -EFAULT;
+	}
+	force_successful_syscall_return();
+	return i;
+}
+```
+
+### Linking system call function
+
+#### Entry point of syscall
+
+By debugging the [init] target created by [makefile](../makefile) with Qemu, we found the entry point of <code>syscall</code> in file <code>arch/x86/entry/entry_64.S:98</code>.
+
+The assembly instruction then call <code>do_syscall_64()</code> function in file <code>arch/x86/entry/common.c:39</code> with following source code:
+
+```c
+__visible noinstr void do_syscall_64(unsigned long nr, struct pt_regs *regs)
+{
+	nr = syscall_enter_from_user_mode(regs, nr);
+
+	instrumentation_begin();
+	if (likely(nr < NR_syscalls)) {
+		nr = array_index_nospec(nr, NR_syscalls);
+		regs->ax = sys_call_table[nr](regs);
+	}
+	instrumentation_end();
+	syscall_exit_to_user_mode(regs);
+}
+```
+
+Obviously the function will call the system call table (<code>sys_call_table</code>) with relative entry to find the function.
+
+#### System call table
+
+System call table is an array of function pointer define in file <code>arch/x86/include/asm/syscall.h:19</code> as follow
+
+```c
+typedef long (*sys_call_ptr_t)(const struct pt_regs *);
+```
+
+It is initialized in file <code>arch/x86/entry/syscall_64.c:20</code> as follow
+
+```c
+asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
+	/*
+	 * Smells like a compiler bug -- it doesn't work
+	 * when the & below is removed.
+	 */
+	[0 ... __NR_syscall_max] = &__x64_sys_ni_syscall,
+#include <asm/syscalls_64.h>
+};
+```
+
+Further each entry define in <code>arch/x86/include/generated/asm/syscalls_64.h</code>(Which is generated while compiling) looks like:
+
+```c
+__SYSCALL_COMMON(0, sys_read)
+__SYSCALL_COMMON(1, sys_write)
+__SYSCALL_COMMON(2, sys_open)
+__SYSCALL_COMMON(3, sys_close)
+...
+__SYSCALL_COMMON(201, sys_time)
+...
+```
+
+We now decompose the <code>__SYSCALL_COMMON</code> macro according to the following definitions:
+
+```c
+// arch/x86/entry/syscall_64.c:12
+#define __SYSCALL_COMMON(nr, sym) __SYSCALL_64(nr, sym)
+
+// arch/x86/entry/syscall_64.c:18
+#define __SYSCALL_64(nr, sym) [nr] = __x64_##sym,
+```
+
+Thus the fully explained initialization of system call table is as follow:
+
+```c
+asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
+	[0] = __x64_sys_read,
+	[1] = __x64_sys_write,
+	[2] = __x64_sys_open,
+	[3] = __x64_sys_close,
+	...
+	[3] = __x64_sys_time,
+	...
+};
+```
+
+Which the time function pointer is corresponding to the line 4 of [previous definition](#bkmk7).
+
+Hence, the total loop for x86_64 system call for time function is completed.
+
 ## ALTERNATIVE
 
 This is an [GAS macro](#macro), located in <code>arch/x86/include/asm/alternative-asm.h:54</code>. Source code is as follow:
@@ -545,7 +1070,7 @@ This is an [GAS macro](#macro), located in <code>arch/x86/include/asm/alternativ
 
 ### Analyze
 
-#### ALTERNATIVE
+#### Body & basic logic
 
 The body of macro is <code>oldinstr+skip pad</code>. And if the <code>feature</code> argument has specific bit set, then will replace <code>oldinstr</code> with <code>newinstr</code>. So that system can auto adjust best code for specific situation (e.g: select best code for different type of CPU). The following will illustrate some of the code to make the whole picture:
 
