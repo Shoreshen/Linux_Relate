@@ -1,6 +1,6 @@
 [TOC]
 
-current mark: 7
+current mark: 16
 
 # Kernel
 
@@ -78,24 +78,24 @@ make mrproper
 
 ### Infix
 
-|Operator|Priority|Functionality|
-|-|-|-|
-|*|High|Multiplication|
-|/|High|Division|
-|%|High|Reminder|
-|>>|High|Shift right|
-|<<|High|Shift left|
-|\||median|Bitwise or|
-|&|median|Bitwise and|
-|^|median|Bitwise xor|
-|!|median|Bitwise or not|
-|+|low|Addition|
-|==|low|Equal, return -1 if true, 0 otherwise|
-|!=|low|Not equal, return -1 if true, 0 otherwise|
-|>|low|Greater than, return -1 if true, 0 otherwise|
-|<|low|Less than, return -1 if true, 0 otherwise|
-|>=|low|Greater than or equal, return -1 if true, 0 otherwise|
-|<=|low|Less then or equal, return -1 if true, 0 otherwise|
+| Operator | Priority | Functionality                                         |
+| -------- | -------- | ----------------------------------------------------- |
+| *        | High     | Multiplication                                        |
+| /        | High     | Division                                              |
+| %        | High     | Reminder                                              |
+| >>       | High     | Shift right                                           |
+| <<       | High     | Shift left                                            |
+| \|       | median   | Bitwise or                                            |
+| &        | median   | Bitwise and                                           |
+| ^        | median   | Bitwise xor                                           |
+| !        | median   | Bitwise or not                                        |
+| +        | low      | Addition                                              |
+| ==       | low      | Equal, return -1 if true, 0 otherwise                 |
+| !=       | low      | Not equal, return -1 if true, 0 otherwise             |
+| >        | low      | Greater than, return -1 if true, 0 otherwise          |
+| <        | low      | Less than, return -1 if true, 0 otherwise             |
+| >=       | low      | Greater than or equal, return -1 if true, 0 otherwise |
+| <=       | low      | Less then or equal, return -1 if true, 0 otherwise    |
 
 ## macro
 
@@ -105,11 +105,11 @@ By using commands <code>.macro</code> and <code>.endm</code> allow you to define
 
 There are several attribute can be put on arguments:
 
-|Attribute|definition|
-|-|-|
-|arg:req|This argument require a non-blank value for this argument|
-|arg:vararg|This argument takes all of the remaining arguments|
-|arg=default|This argument has a default value|
+| Attribute   | definition                                                |
+| ----------- | --------------------------------------------------------- |
+| arg:req     | This argument require a non-blank value for this argument |
+| arg:vararg  | This argument takes all of the remaining arguments        |
+| arg=default | This argument has a default value                         |
 
 Argument <code>arg</code> can be referenced as <code>\arg</code> inside the macro definition.
 
@@ -125,29 +125,29 @@ Default 3 sections from GAS is text, data and bss. These sections can be empty. 
 
 For ELF format, the following flags can be set:
 
-|Flag|Meaning|
-|-|-|
-|a|section is allocatable|
-|d|section is a GNU MBIND section|
-|e|section is excluded from executable and shared library.|
-|w|section is writable|
-|x|section is executable|
-|M|section is mergeable|
-|S|section contains zero terminated strings|
-|G|section is a member of a section group|
-|T|section is used for thread-local-storage|
+| Flag | Meaning                                                 |
+| ---- | ------------------------------------------------------- |
+| a    | section is allocatable                                  |
+| d    | section is a GNU MBIND section                          |
+| e    | section is excluded from executable and shared library. |
+| w    | section is writable                                     |
+| x    | section is executable                                   |
+| M    | section is mergeable                                    |
+| S    | section contains zero terminated strings                |
+| G    | section is a member of a section group                  |
+| T    | section is used for thread-local-storage                |
 
 ### linking section
 
 Without <code>*.lds</code> file present, linker will only deal with the following sections.
 
-|Section|Use|Storage|Accessability|
-|-|-|-|-|
-|Text | Used for storing executable code|Saved in the object file|readable but not writable|
-|Data | Used for storing data|Saved in the object file|readable & writable|
-|Bss |Used to store uninitialized global, static variables|Allocate at runtime|readable & writable|
-|Absolute|Address 0 of this section is always “relocated” to runtime address 0|||
-|Undefined|All address references to objects not in the preceding sections|||
+| Section   | Use                                                                  | Storage                  | Accessability             |
+| --------- | -------------------------------------------------------------------- | ------------------------ | ------------------------- |
+| Text      | Used for storing executable code                                     | Saved in the object file | readable but not writable |
+| Data      | Used for storing data                                                | Saved in the object file | readable & writable       |
+| Bss       | Used to store uninitialized global, static variables                 | Allocate at runtime      | readable & writable       |
+| Absolute  | Address 0 of this section is always “relocated” to runtime address 0 |                          |                           |
+| Undefined | All address references to objects not in the preceding sections      |                          |                           |
 
 ### as internal sections
 
@@ -514,6 +514,118 @@ Run until the break point with <code>c</code> command, then switch to source lay
 # Source code
 
 ## System call
+
+### Stack structure
+
+The stack structure and relative definitions will be applied in the following processes
+
+```c
+// arch/x86/include/asm/ptrace.h:56
+struct pt_regs {
+/*
+ * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
+ * unless syscall needs a complete, fully filled "struct pt_regs".
+ */
+	unsigned long r15;
+	unsigned long r14;
+	unsigned long r13;
+	unsigned long r12;
+	unsigned long bp;
+	unsigned long bx;
+/* These regs are callee-clobbered. Always saved on kernel entry. */
+	unsigned long r11;
+	unsigned long r10;
+	unsigned long r9;
+	unsigned long r8;
+	unsigned long ax;
+	unsigned long cx;
+	unsigned long dx;
+	unsigned long si;
+	unsigned long di;
+/*
+ * On syscall entry, this is syscall#. On CPU exception, this is error code.
+ * On hw interrupt, it's IRQ number:
+ */
+	unsigned long orig_ax;
+/* Return frame for iretq */
+	unsigned long ip;
+	unsigned long cs;
+	unsigned long flags;
+	unsigned long sp;
+	unsigned long ss;
+/* top of stack page */
+};
+
+// arch/x86/include/uapi/asm/ptrace.h:44
+struct pt_regs {
+/*
+ * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
+ * unless syscall needs a complete, fully filled "struct pt_regs".
+ */
+	unsigned long r15;
+	unsigned long r14;
+	unsigned long r13;
+	unsigned long r12;
+	unsigned long rbp;
+	unsigned long rbx;
+/* These regs are callee-clobbered. Always saved on kernel entry. */
+	unsigned long r11;
+	unsigned long r10;
+	unsigned long r9;
+	unsigned long r8;
+	unsigned long rax;
+	unsigned long rcx;
+	unsigned long rdx;
+	unsigned long rsi;
+	unsigned long rdi;
+/*
+ * On syscall entry, this is syscall#. On CPU exception, this is error code.
+ * On hw interrupt, it's IRQ number:
+ */
+	unsigned long orig_rax;
+/* Return frame for iretq */
+	unsigned long rip;
+	unsigned long cs;
+	unsigned long eflags;
+	unsigned long rsp;
+	unsigned long ss;
+/* top of stack page */
+};
+
+// arch/x86/entry/calling.h:70
+/*
+ * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
+ * unless syscall needs a complete, fully filled "struct pt_regs".
+ */
+#define R15		0*8
+#define R14		1*8
+#define R13		2*8
+#define R12		3*8
+#define RBP		4*8
+#define RBX		5*8
+/* These regs are callee-clobbered. Always saved on kernel entry. */
+#define R11		6*8
+#define R10		7*8
+#define R9		8*8
+#define R8		9*8
+#define RAX		10*8
+#define RCX		11*8
+#define RDX		12*8
+#define RSI		13*8
+#define RDI		14*8
+/*
+ * On syscall entry, this is syscall#. On CPU exception, this is error code.
+ * On hw interrupt, it's IRQ number:
+ */
+#define ORIG_RAX	15*8
+/* Return frame for iretq */
+#define RIP		16*8
+#define CS		17*8
+#define EFLAGS		18*8
+#define RSP		19*8
+#define SS		20*8
+```
+
 ### Defining system call function
 
 Using a special function as in <code>kernel/time/time.c:62</code> with the following source code to illustrate:
@@ -878,7 +990,7 @@ static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
 
 ##### Passing parameter
 
-According to following macro definition:
+According to following macro definition and [stack structure](#stack-structure):
 
 ```c
 // arch/x86/include/asm/syscall_wrapper.h:56
@@ -886,42 +998,6 @@ According to following macro definition:
 	__MAP(x,__SC_ARGS						\
 		,,regs->di,,regs->si,,regs->dx				\
 		,,regs->r10,,regs->r8,,regs->r9)			\
-
-// arch/x86/include/asm/ptrace.h:56
-struct pt_regs {
-/*
- * C ABI says these regs are callee-preserved. They aren't saved on kernel entry
- * unless syscall needs a complete, fully filled "struct pt_regs".
- */
-	unsigned long r15;
-	unsigned long r14;
-	unsigned long r13;
-	unsigned long r12;
-	unsigned long bp;
-	unsigned long bx;
-/* These regs are callee-clobbered. Always saved on kernel entry. */
-	unsigned long r11;
-	unsigned long r10;
-	unsigned long r9;
-	unsigned long r8;
-	unsigned long ax;
-	unsigned long cx;
-	unsigned long dx;
-	unsigned long si;
-	unsigned long di;
-/*
- * On syscall entry, this is syscall#. On CPU exception, this is error code.
- * On hw interrupt, it's IRQ number:
- */
-	unsigned long orig_ax;
-/* Return frame for iretq */
-	unsigned long ip;
-	unsigned long cs;
-	unsigned long flags;
-	unsigned long sp;
-	unsigned long ss;
-/* top of stack page */
-};
 ```
 
 According to [MAPPING](#bkmk5) and [SC](#bkmk6) definition we find that only the first argument make effect in this macro, and finally we present the comprehensive definition of time system call function.
@@ -956,7 +1032,53 @@ static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
 
 #### Entry point of syscall
 
-By debugging the [init] target created by [makefile](../makefile) with Qemu, we found the entry point of <code>syscall</code> in file <code>arch/x86/entry/entry_64.S:98</code>.
+##### Assembly entry
+
+By debugging the [init](../myfs/init.c) target created by [makefile](../makefile) with Qemu, we found the entry point of <code>syscall</code> as follow;
+
+```c
+// arch/x86/entry/entry_64.S:95
+SYM_CODE_START(entry_SYSCALL_64)
+	UNWIND_HINT_EMPTY
+
+	swapgs
+	/* tss.sp2 is scratch space. */
+	movq	%rsp, PER_CPU_VAR(cpu_tss_rw + TSS_sp2)
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rsp
+	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
+```
+
+According to the above [SWITCH_TO_KERNEL_CR3](#bkmk8), [ALTERNATIVE](#alternative) definition and the debugging info indicating not setting of <code>X86_FEATURE_PTI</code>, we got the result that <code>jmp .Lend_\@</code> in [SWITCH_TO_KERNEL_CR3](#bkmk8) will not be replaced and this macro will be jumped over. Thus this part of code only switch <code>%rsp</code> register. Next codes are:
+
+<a id='bkmk10'></a>
+```c
+// arch/x86/entry/entry_64.S:106
+	/* Construct struct pt_regs on stack */
+	pushq	$__USER_DS				/* pt_regs->ss */
+	pushq	PER_CPU_VAR(cpu_tss_rw + TSS_sp2)	/* pt_regs->sp */
+	pushq	%r11					/* pt_regs->flags */
+	pushq	$__USER_CS				/* pt_regs->cs */
+	pushq	%rcx					/* pt_regs->ip */
+SYM_INNER_LABEL(entry_SYSCALL_64_after_hwframe, SYM_L_GLOBAL)
+	pushq	%rax					/* pt_regs->orig_ax */
+```
+
+The above code saves user <code>%ss</code>, <code>%rsp</code>, <code>%rflag</code>(syscall saves <code>%rflag</code> to <code>%r11</code>), <code>%cs</code>, <code>%rip</code>(syscall saves <code>%rip</code> to <code>%rcx</code>) and <code>orig_ax</code> according to [stack structure](#stack-structure). Next codes are:
+
+<a id='bkmk12'></a>
+```c
+// arch/x86/entry/entry_64.S:115
+	PUSH_AND_CLEAR_REGS rax=$-ENOSYS
+
+	/* IRQs are off. */
+	movq	%rax, %rdi
+	movq	%rsp, %rsi
+	call	do_syscall_64		/* returns with IRQs disabled */
+```
+
+According to [PUSH_AND_CLEAR_REGS](#bkmk9) saves all the rest of relevant registers in stack and call [do_syscall_64()](#do_syscall_64) function with parameter of <code>unsigned long nr %rax</code> and <code>struct pt_regs * %rsp</code>
+
+##### do_syscall_64()
 
 The assembly instruction then call <code>do_syscall_64()</code> function in file <code>arch/x86/entry/common.c:39</code> with following source code:
 
@@ -1037,6 +1159,270 @@ asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
 Which the time function pointer is corresponding to the line 4 of [previous definition](#bkmk7).
 
 Hence, the total loop for x86_64 system call for time function is completed.
+
+#### Return from system call
+
+The return process are steps to check return status. If exception found, program will jump to the error handling return process labeled <code>swapgs_restore_regs_and_return_to_usermode</code>. Currently we only analyze the normal return process.
+
+Then the first step is to check the return address, <code>%rcx</code> is the return address set for <code>sysret</code>, it should be the same with <code>%rip</code>:
+
+```c
+// arch/x86/entry/entry_64.S:127
+movq	RCX(%rsp), %rcx
+movq	RIP(%rsp), %r11
+
+cmpq	%rcx, %r11	/* SYSRET requires RCX == RIP */
+jne	swapgs_restore_regs_and_return_to_usermode
+```
+
+This code test user <code>rcx</code>, <code>rip</code> saved in stack according to [struct pt_regs](#stack-structure). According to [push sequence](#bkmk10) in [assembly entry](#assembly-entry) they should be same if stack is not polluted. Next step:
+
+```c
+// arch/x86/entry/entry_64.S：144
+#ifdef CONFIG_X86_5LEVEL
+	ALTERNATIVE "shl $(64 - 48), %rcx; sar $(64 - 48), %rcx", \
+		"shl $(64 - 57), %rcx; sar $(64 - 57), %rcx", X86_FEATURE_LA57
+#else
+	shl	$(64 - (__VIRTUAL_MASK_SHIFT+1)), %rcx
+	sar	$(64 - (__VIRTUAL_MASK_SHIFT+1)), %rcx
+#endif
+
+	/* If this changed %rcx, it was not canonical */
+	cmpq	%rcx, %r11
+	jne	swapgs_restore_regs_and_return_to_usermode
+```
+
+By debugging and <code>.config</code> file, we found that <code>CONFIG_X86_5LEVEL</code> is set and <code>X86_FEATURE_LA57</code> is not set, thus with the help of [ALTERNATIVE](#alternative), the first part of code simplified to <code>shl \$(64 - 48), %rcx; sar \$(64 - 48), %rcx</code>.
+
+This is set to prevent non-canonical return address (<code>sar</code> instruction adding the same as the highest bit when shifting). Next we have:
+
+```c
+// arch/x86/entry/entry_64.S:156
+	cmpq	$__USER_CS, CS(%rsp)		/* CS must match SYSRET */
+	jne	swapgs_restore_regs_and_return_to_usermode
+
+	movq	R11(%rsp), %r11
+	cmpq	%r11, EFLAGS(%rsp)		/* R11 == RFLAGS */
+	jne	swapgs_restore_regs_and_return_to_usermode
+
+// arch/x86/entry/entry_64.S:186
+	cmpq	$__USER_DS, SS(%rsp)		/* SS must match SYSRET */
+	jne	swapgs_restore_regs_and_return_to_usermode
+```
+
+This part of code checks the user <code>cs</code>, <code>eflags</code> and <code>ss</code> in stack with [stack structure](#stack-structure), also meant to prevent stack pollution. Next:
+
+```c
+// arch/x86/entry/entry_64.S:181
+	testq	$(X86_EFLAGS_RF|X86_EFLAGS_TF), %r11
+	jnz	swapgs_restore_regs_and_return_to_usermode
+```
+
+This part check if <code>eflags.RF</code> and <code>eflags.TF</code> are set. The <code>eflags.RF</code> should be cleared by <code>syscall</code> and cannot be restored by <code>sysret</code>, further process was required to restore it correctly. <code>eflags.TF</code> should not be set in user mode, otherwise will cause infinite loop when #DB (debug exception). Next we have:
+
+```c
+// arch/x86/entry/entry_64.S:193
+	/* rcx and r11 are already restored (see code above) */
+	POP_REGS pop_rdi=0 skip_r11rcx=1
+```
+
+According to [POP_REGS](#bkmk11) we can clarify that this is the anti-process against [previous push](#bkmk12). It restores the saved user registers up to and except <code>%rdi</code> according to [stack structure](#stack-structure). The current stack pointer at <code>pt_regs->di</code>. Next:
+
+```c
+// arch/x86/entry/entry_64.S:201
+	movq	%rsp, %rdi
+	movq	PER_CPU_VAR(cpu_tss_rw + TSS_sp0), %rsp
+	UNWIND_HINT_EMPTY
+
+	pushq	RSP-RDI(%rdi)	/* RSP */
+	pushq	(%rdi)		/* RDI */
+```
+
+This code save the current <code>%rsp</code> to <code>%rdi</code>, move restore sp0 value into <code>%rsp</code>. Then push the user <code>%rdi</code> and <code>%rsp</code> into stack. Next:
+
+```c
+// arch/x86/entry/entry_64.S:212
+	STACKLEAK_ERASE_NOCLOBBER
+
+	SWITCH_TO_USER_CR3_STACK scratch_reg=%rdi
+```
+
+With debugging we know that <code>X86_FEATURE_PTI</code> is not set, <code>CONFIG_GCC_PLUGIN_STACKLEAK</code> is not set. Along with the definition of [STACKLEAK_ERASE_NOCLOBBER](#bkmk15), [SWITCH_TO_USER_CR3_STACK](#bkmk14), [SWITCH_TO_USER_CR3_NOSTACK](#bkmk13) and [ALTERNATIVE](#alternative), it is concluded that no code is applied from these macro. Next
+
+```c
+	popq	%rdi
+	popq	%rsp
+	USERGS_SYSRET64
+```
+
+By dumping <code>arch/x86/entry/entry_64.o</code> we confirmed the definition of [USERGS_SYSRET64](#bkmk16). So the last code just popped out the user <code>%rdi</code> and <code>%rsp</code> (this will restore to user stack) saved in current stack, then <code>swapgs</code> and <code>0x48 sysret</code>
+
+### Other references
+
+<a id='bkmk16'>USERGS_SYSRET64</a> [GAS macro](#macro) in file <code>arch/x86/include/asm/irqflags.h:147</code>
+
+```c
+#define USERGS_SYSRET64				\
+	swapgs;					\
+	sysretq;
+```
+
+<a id='bkmk15'>STACKLEAK_ERASE_NOCLOBBER</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:336</code>
+
+```c
+.macro STACKLEAK_ERASE_NOCLOBBER
+#ifdef CONFIG_GCC_PLUGIN_STACKLEAK
+	PUSH_AND_CLEAR_REGS
+	call stackleak_erase
+	POP_REGS
+#endif
+.endm
+```
+
+<a id='bkmk14'>SWITCH_TO_USER_CR3_STACK</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:244</code>
+
+```c
+.macro SWITCH_TO_USER_CR3_STACK	scratch_reg:req
+	pushq	%rax
+	SWITCH_TO_USER_CR3_NOSTACK scratch_reg=\scratch_reg scratch_reg2=%rax
+	popq	%rax
+.endm
+```
+
+<a id='bkmk13'>SWITCH_TO_USER_CR3_NOSTACK</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:210</code>
+
+```c
+.macro SWITCH_TO_USER_CR3_NOSTACK scratch_reg:req scratch_reg2:req
+	ALTERNATIVE "jmp .Lend_\@", "", X86_FEATURE_PTI
+	mov	%cr3, \scratch_reg
+
+	ALTERNATIVE "jmp .Lwrcr3_\@", "", X86_FEATURE_PCID
+
+	/*
+	 * Test if the ASID needs a flush.
+	 */
+	movq	\scratch_reg, \scratch_reg2
+	andq	$(0x7FF), \scratch_reg		/* mask ASID */
+	bt	\scratch_reg, THIS_CPU_user_pcid_flush_mask
+	jnc	.Lnoflush_\@
+
+	/* Flush needed, clear the bit */
+	btr	\scratch_reg, THIS_CPU_user_pcid_flush_mask
+	movq	\scratch_reg2, \scratch_reg
+	jmp	.Lwrcr3_pcid_\@
+
+.Lnoflush_\@:
+	movq	\scratch_reg2, \scratch_reg
+	SET_NOFLUSH_BIT \scratch_reg
+
+.Lwrcr3_pcid_\@:
+	/* Flip the ASID to the user version */
+	orq	$(PTI_USER_PCID_MASK), \scratch_reg
+
+.Lwrcr3_\@:
+	/* Flip the PGD to the user version */
+	orq     $(PTI_USER_PGTABLE_MASK), \scratch_reg
+	mov	\scratch_reg, %cr3
+.Lend_\@:
+.endm
+```
+
+<a id='bkmk8'>SWITCH_TO_KERNEL_CR3</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:199</code>
+
+```c
+.macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+	ALTERNATIVE "jmp .Lend_\@", "", X86_FEATURE_PTI
+	mov	%cr3, \scratch_reg
+	ADJUST_KERNEL_CR3 \scratch_reg
+	mov	\scratch_reg, %cr3
+.Lend_\@:
+.endm
+```
+
+<a id='bkmk9'>PUSH_AND_CLEAR_REGS</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:100</code>
+
+```c
+.macro PUSH_AND_CLEAR_REGS rdx=%rdx rax=%rax save_ret=0
+	.if \save_ret
+	pushq	%rsi		/* pt_regs->si */
+	movq	8(%rsp), %rsi	/* temporarily store the return address in %rsi */
+	movq	%rdi, 8(%rsp)	/* pt_regs->di (overwriting original return address) */
+	.else
+	pushq   %rdi		/* pt_regs->di */
+	pushq   %rsi		/* pt_regs->si */
+	.endif
+	pushq	\rdx		/* pt_regs->dx */
+	pushq   %rcx		/* pt_regs->cx */
+	pushq   \rax		/* pt_regs->ax */
+	pushq   %r8		/* pt_regs->r8 */
+	pushq   %r9		/* pt_regs->r9 */
+	pushq   %r10		/* pt_regs->r10 */
+	pushq   %r11		/* pt_regs->r11 */
+	pushq	%rbx		/* pt_regs->rbx */
+	pushq	%rbp		/* pt_regs->rbp */
+	pushq	%r12		/* pt_regs->r12 */
+	pushq	%r13		/* pt_regs->r13 */
+	pushq	%r14		/* pt_regs->r14 */
+	pushq	%r15		/* pt_regs->r15 */
+	UNWIND_HINT_REGS
+
+	.if \save_ret
+	pushq	%rsi		/* return address on top of stack */
+	.endif
+
+	/*
+	 * Sanitize registers of values that a speculation attack might
+	 * otherwise want to exploit. The lower registers are likely clobbered
+	 * well before they could be put to use in a speculative execution
+	 * gadget.
+	 */
+	xorl	%edx,  %edx	/* nospec dx  */
+	xorl	%ecx,  %ecx	/* nospec cx  */
+	xorl	%r8d,  %r8d	/* nospec r8  */
+	xorl	%r9d,  %r9d	/* nospec r9  */
+	xorl	%r10d, %r10d	/* nospec r10 */
+	xorl	%r11d, %r11d	/* nospec r11 */
+	xorl	%ebx,  %ebx	/* nospec rbx */
+	xorl	%ebp,  %ebp	/* nospec rbp */
+	xorl	%r12d, %r12d	/* nospec r12 */
+	xorl	%r13d, %r13d	/* nospec r13 */
+	xorl	%r14d, %r14d	/* nospec r14 */
+	xorl	%r15d, %r15d	/* nospec r15 */
+
+.endm
+```
+
+<a id='bkmk11'>POP_REGS</a> [GAS macro](#macro) in file <code>arch/x86/entry/calling.h:149</code>
+
+```c
+.macro POP_REGS pop_rdi=1 skip_r11rcx=0
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbp
+	popq %rbx
+	.if \skip_r11rcx
+	popq %rsi
+	.else
+	popq %r11
+	.endif
+	popq %r10
+	popq %r9
+	popq %r8
+	popq %rax
+	.if \skip_r11rcx
+	popq %rsi
+	.else
+	popq %rcx
+	.endif
+	popq %rdx
+	popq %rsi
+	.if \pop_rdi
+	popq %rdi
+	.endif
+.endm
+```
 
 ## ALTERNATIVE
 
@@ -1233,13 +1619,13 @@ void __init_or_module noinline apply_alternatives(struct alt_instr *start,
 
 ### Parameter
 
-|Name|illustration|
-|-|-|
-|ptr|Pointer to the target value|
-|old|Old value|
-|new|new value|
-|size|To determine the size (2/4/8) in byte the operation is on|
-|lock|Lock preffix, make sure atomic operation|
+| Name | illustration                                              |
+| ---- | --------------------------------------------------------- |
+| ptr  | Pointer to the target value                               |
+| old  | Old value                                                 |
+| new  | new value                                                 |
+| size | To determine the size (2/4/8) in byte the operation is on |
+| lock | Lock preffix, make sure atomic operation                  |
 
 ### Logic
 
@@ -1427,14 +1813,14 @@ Format as
 ```shell
 gcc [options] <source files>
 ```
-|Option|Illustration|
-|-|-|
-|<code>-m64</code>| Set int to 32 bits, long & pointer to 64 bits, generate x86_64 architechture|
-|<code>-c</code>| Compile but do not link, create .o files|
-|<code>-g</code>| Compile with debug information|
-|<code>-o</code>| Specify output file name|
-|<code>-fPIC</code>| If supported for the target machine, produce position-independent code|
-|<code>-fvisibility=[default|internal|hidden|protected]</code>| Set the defualt attribute for export table of executable, can be overridden by <code>\_\_attribute__ ((visibility("default|internal|hidden|protected")))</code> within source codes.|
-|<code>-z muldefs</code>| Allow multiple definition|
-|<code>-s</code>| Remove all symbol table and relocation information from the executable.|
-|<code>-D</code>| Provide command line macro definition e.g. <code>-D 'DEV_PATH="/dev/demo"'</code> same as <code>#define DEV_PATH "/dev/demo"</code> in C code|
+| Option                      | Illustration                                                                                                                                  |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| <code>-m64</code>           | Set int to 32 bits, long & pointer to 64 bits, generate x86_64 architechture                                                                  |
+| <code>-c</code>             | Compile but do not link, create .o files                                                                                                      |
+| <code>-g</code>             | Compile with debug information                                                                                                                |
+| <code>-o</code>             | Specify output file name                                                                                                                      |
+| <code>-fPIC</code>          | If supported for the target machine, produce position-independent code                                                                        |
+| <code>-fvisibility=[default | internal                                                                                                                                      | hidden | protected]</code> | Set the defualt attribute for export table of executable, can be overridden by <code>\_\_attribute__ ((visibility("default | internal | hidden | protected")))</code> within source codes. |
+| <code>-z muldefs</code>     | Allow multiple definition                                                                                                                     |
+| <code>-s</code>             | Remove all symbol table and relocation information from the executable.                                                                       |
+| <code>-D</code>             | Provide command line macro definition e.g. <code>-D 'DEV_PATH="/dev/demo"'</code> same as <code>#define DEV_PATH "/dev/demo"</code> in C code |
