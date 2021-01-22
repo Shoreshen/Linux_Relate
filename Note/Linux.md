@@ -1,6 +1,96 @@
-[TOC]
+- [Kernel](#kernel)
+	- [Create config file](#create-config-file)
+		- [Options](#options)
+			- [Debug (using GDB)](#debug-using-gdb)
+	- [Compile kernel](#compile-kernel)
+	- [Clean compiled files](#clean-compiled-files)
+- [GNU Assembly](#gnu-assembly)
+	- [Operators](#operators)
+		- [Infix](#infix)
+	- [macro](#macro)
+	- [Section](#section)
+		- [Section attribute](#section-attribute)
+		- [linking section](#linking-section)
+		- [as internal sections](#as-internal-sections)
+		- [Subsection](#subsection)
+		- [ELF section stack manipulation directives](#elf-section-stack-manipulation-directives)
+			- [.previous](#previous)
+			- [.pushsection & .popsection](#pushsection--popsection)
+				- [Sample](#sample)
+					- [Target & background](#target--background)
+					- [Analyze of code](#analyze-of-code)
+	- [Other directive](#other-directive)
+		- [.skip/.space](#skipspace)
+- [Rootfs](#rootfs)
+	- [busybox](#busybox)
+		- [Clone source](#clone-source)
+		- [Configure](#configure)
+		- [Compile](#compile)
+	- [Extra file/dirs](#extra-filedirs)
+	- [Packup runable filesystem](#packup-runable-filesystem)
+- [Debug](#debug)
+	- [Compiler optimization](#compiler-optimization)
+	- [vscode](#vscode)
+	- [qemu](#qemu)
+	- [GDB](#gdb)
+		- [GDB commands](#gdb-commands)
+			- [Break](#break)
+			- [Step](#step)
+			- [View content](#view-content)
+			- [Others](#others)
+- [Source code](#source-code)
+	- [Deal with macro](#deal-with-macro)
+		- [Find out inclusion files](#find-out-inclusion-files)
+		- [Using gcc's to output pre-process file](#using-gccs-to-output-pre-process-file)
+		- [Sample](#sample-1)
+	- [System call](#system-call)
+		- [Stack structure](#stack-structure)
+		- [Defining system call function](#defining-system-call-function)
+			- [Find out exact expression of function](#find-out-exact-expression-of-function)
+			- [Deal with parameters](#deal-with-parameters)
+				- [Mapping macros](#mapping-macros)
+				- [Passing parameter](#passing-parameter)
+		- [Linking system call function](#linking-system-call-function)
+			- [Entry point of syscall](#entry-point-of-syscall)
+				- [Assembly entry](#assembly-entry)
+				- [do_syscall_64()](#do_syscall_64)
+			- [System call table](#system-call-table)
+			- [Return from system call](#return-from-system-call)
+		- [Other references](#other-references)
+	- [ALTERNATIVE](#alternative)
+		- [Analyze](#analyze)
+			- [Body & basic logic](#body--basic-logic)
+			- [apply_alternatives()](#apply_alternatives)
+		- [Other reference](#other-reference)
+	- [__raw_cmpxchg(ptr, old, new, size, lock)](#__raw_cmpxchgptr-old-new-size-lock)
+		- [Location](#location)
+		- [Parameter](#parameter)
+		- [Logic](#logic)
+	- [arch_atomic_try_cmpxchg_acquire(atomic_t *v, int *old, int new)](#arch_atomic_try_cmpxchg_acquireatomic_t-v-int-old-int-new)
+		- [Location](#location-1)
+		- [Logic](#logic-1)
+- [Linux command](#linux-command)
+	- [stdin/stdout/stderr & redirection](#stdinstdoutstderr--redirection)
+		- [stdin/stdout/stderr](#stdinstdoutstderr)
+		- [redirection](#redirection)
+		- [sample](#sample-2)
+	- ["&&" and "||"](#-and-)
+	- [man](#man)
+	- [dmesg](#dmesg)
+	- [grep](#grep)
+	- [ld](#ld)
+	- [find](#find)
+		- [Option](#option)
+			- [Sample 1](#sample-1)
+			- [Sample 2](#sample-2)
+- [gcc](#gcc)
+	- [Format](#format)
+	- [build-in function](#build-in-function)
+		- [__typedef(exp) & __typedef__(exp) & typeof(exp)](#__typedefexp--typedefexp--typeofexp)
+		- [int __builtin_types_compatible_p(type1, type2)](#int-__builtin_types_compatible_ptype1-type2)
+		- [type __builtin_choose_expr(const_exp,exp1,exp2)](#type-__builtin_choose_exprconst_expexp1exp2)
 
-current mark: 16
+current mark: 17
 
 # Kernel
 
@@ -513,6 +603,208 @@ Run until the break point with <code>c</code> command, then switch to source lay
 
 # Source code
 
+## Deal with macro
+
+Source code contains massive macro, to find out the detail definition of them, we apply the pre-process functionality.
+
+### Find out inclusion files
+
+We need the location of definition of macros to decompose them.
+
+To find out what kind of files are included while compiling kernel, we search the root makefile and find the following key lines:
+
+```makefile
+# ./makefile:477
+
+# Use USERINCLUDE when you must reference the UAPI directories only.
+USERINCLUDE    := \
+		-I$(srctree)/arch/$(SRCARCH)/include/uapi \
+		-I$(objtree)/arch/$(SRCARCH)/include/generated/uapi \
+		-I$(srctree)/include/uapi \
+		-I$(objtree)/include/generated/uapi \
+                -include $(srctree)/include/linux/kconfig.h
+
+# Use LINUXINCLUDE when you must reference the include/ directory.
+# Needed to be compatible with the O= option
+LINUXINCLUDE    := \
+		-I$(srctree)/arch/$(SRCARCH)/include \
+		-I$(objtree)/arch/$(SRCARCH)/include/generated \
+		$(if $(building_out_of_srctree),-I$(srctree)/include) \
+		-I$(objtree)/include \
+		$(USERINCLUDE)
+```
+
+By manually search these variables in command, we interpret the <code>$(LINUXINCLUDE)</code> variable as follow:
+
+```c
+LINUXINCLUDE =
+	-I ./linux/arch/x86/include \
+	-I ./linux/arch/x86/include/uapi \
+	-I ./linux/arch/x86/include/generated \
+	-I ./linux/arch/x86/include/generated/uapi \
+	-I ./linux/include \
+	-I ./linux/include/uapi \
+	-I ./linux/include/generated/uapi \
+	-include ./linux/include/linux/kconfig.h
+```
+
+### Using gcc's to output pre-process file
+
+We then call <code>gcc</code> with <code>-E</code> to tell the compiler to output pre-process file
+
+```shell
+gcc -I ./linux/arch/x86/include \
+	-I ./linux/arch/x86/include/uapi \
+	-I ./linux/arch/x86/include/generated \
+	-I ./linux/arch/x86/include/generated/uapi \
+	-I ./linux/include \
+	-I ./linux/include/uapi \
+	-I ./linux/include/generated/uapi \
+	-E <path/to/target/file> -o <output/file/name>;
+```
+
+### Sample
+
+To compare with [system call analysis](#defining-system-call-function), we use <code>kernel/time/time.c:62</code> as an example.
+
+To analyze the macros in the target, we run:
+
+```shell
+gcc -I ./linux/arch/x86/include \
+	-I ./linux/arch/x86/include/uapi \
+	-I ./linux/arch/x86/include/generated \
+	-I ./linux/arch/x86/include/generated/uapi \
+	-I ./linux/include \
+	-I ./linux/include/uapi \
+	-I ./linux/include/generated/uapi \
+	-E ./linux/kernel/time/time.c -o trg.E;
+```
+
+Thus we got the pre-processed file in <code>./trg.E:58242</code>, and find out the target function we aimed for:
+
+```c
+static long __se_sys_time(__typeof(__builtin_choose_expr((__builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0LL)) || __builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0ULL))), 0LL, 0L)) tloc); 
+static inline long __do_sys_time(__kernel_old_time_t * tloc); 
+long __x64_sys_time(const struct pt_regs *regs); 
+ALLOW_ERROR_INJECTION(__x64_sys_time, ERRNO); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+    return __se_sys_time(regs->di); 
+} 
+long __ia32_sys_time(const struct pt_regs *regs); 
+ALLOW_ERROR_INJECTION(__ia32_sys_time, ERRNO); 
+long __ia32_sys_time(const struct pt_regs *regs) 
+{ 
+    return __se_sys_time((unsigned int)regs->bx); 
+} 
+static long __se_sys_time(__typeof(__builtin_choose_expr((__builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0LL)) || __builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0ULL))), 0LL, 0L)) tloc) 
+{ 
+    long ret = __do_sys_time(( __kernel_old_time_t *) tloc); 
+    (void)((int)(sizeof(struct { int:(-!!(!(__builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0LL)) || __builtin_types_compatible_p(typeof(( __kernel_old_time_t *)0), typeof(0ULL))) && sizeof(__kernel_old_time_t *) > sizeof(long))); }))); 
+    do { } while (0); 
+    return ret; 
+} 
+static inline long __do_sys_time(__kernel_old_time_t * tloc)
+{
+    __kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+    if (tloc) {
+        if (
+            ({ 
+                might_fault(); 
+                ({ 
+                    int __ret_pu; 
+                    void *__ptr_pu; 
+                    register __typeof__(*(tloc)) __val_pu asm("%""rax"); 
+                    (void)0; 
+                    __ptr_pu = (tloc); 
+                    __val_pu = (i); 
+                    asm volatile(
+                        "call __" "put_user" "_%P[size]" 
+                        : "=c" (__ret_pu), "+r" (current_stack_pointer) 
+                        : "0" (__ptr_pu), "r" (__val_pu), [size] "i" (sizeof(*(tloc))) 
+                        :"ebx"
+                    ); 
+                    __builtin_expect(__ret_pu, 0); 
+                }); 
+            })
+        )
+        return -14;
+    }
+    do { } while (0);
+    return i;
+}
+```
+
+Similarly according to [typeof](#__typedefexp--typedefexp--typeofexp), [__builtin_types_compatible_p](#int-__builtin_types_compatible_ptype1-type2) and [__builtin_choose_expr](#type-__builtin_choose_exprconst_expexp1exp2) we can figure out the logic of choosing type for <code>tloc</code>.
+
+Also with the [definition](#bkmk17) we found for <code>__kernel_old_time_t</code>, we further intepret the above function as:
+
+```c
+static long __se_sys_time(long tloc); 
+static inline long __do_sys_time(__kernel_old_time_t * tloc); 
+long __x64_sys_time(const struct pt_regs *regs); 
+ALLOW_ERROR_INJECTION(__x64_sys_time, ERRNO); 
+long __x64_sys_time(const struct pt_regs *regs) 
+{ 
+    return __se_sys_time(regs->di); 
+} 
+long __ia32_sys_time(const struct pt_regs *regs); 
+ALLOW_ERROR_INJECTION(__ia32_sys_time, ERRNO); 
+long __ia32_sys_time(const struct pt_regs *regs) 
+{ 
+    return __se_sys_time((unsigned int)regs->bx); 
+} 
+static long __se_sys_time(long tloc) 
+{ 
+    long ret = __do_sys_time(( __kernel_old_time_t *) tloc); 
+    (void)((int)(sizeof(
+		struct { 
+			int:(
+				-!!(
+					!(0 || 0) && 
+					sizeof(__kernel_old_time_t *) > sizeof(long)
+				)
+			); 
+		}
+	))); 
+    do { } while (0); 
+    return ret; 
+} 
+static inline long __do_sys_time(__kernel_old_time_t * tloc)
+{
+    __kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();
+
+    if (tloc) {
+        if (
+            ({ 
+                might_fault(); 
+                ({ 
+                    int __ret_pu; 
+                    void *__ptr_pu; 
+                    register __typeof__(*(tloc)) __val_pu asm("%""rax"); 
+                    (void)0; 
+                    __ptr_pu = (tloc); 
+                    __val_pu = (i); 
+                    asm volatile(
+                        "call __" "put_user" "_%P[size]" 
+                        : "=c" (__ret_pu), "+r" (current_stack_pointer) 
+                        : "0" (__ptr_pu), "r" (__val_pu), [size] "i" (sizeof(*(tloc))) 
+                        :"ebx"
+                    ); 
+                    __builtin_expect(__ret_pu, 0); 
+                }); 
+            })
+        )
+        return -14;
+    }
+    do { } while (0);
+    return i;
+}
+```
+
+It can be seen that except 32 bit function deceleration, some of the checking macro we eliminated and macros inside the function, it is the same as our [manual interpretation](#bkmk7)
+
 ## System call
 
 ### Stack structure
@@ -934,14 +1226,10 @@ static inline long __do_sys_time(__kernel_old_time_t __user * tloc)
 }
 ```
 
-According to [this post](https://stackoverflow.com/questions/14877415/difference-between-typeof-typeof-and-typeof-in-objective-c#:~:text=3%20Answers&text=__typeof__()%20and%20__typeof,not%20include%20such%20an%20operator.&text=typeof()%20is%20exactly%20the,every%20modern%20compiler%20supports%20it.) it is equivalent for <code>typedef</code>, <code>__typedef</code> and <code>_\_typedef\_\_</code>.
-
-Further we import 2 compiler build in function:
-1. <code>int __builtin_types_compatible_p(type1, type2)</code> return 1 if type1 is same as type2.
-2. <code>type __builtin_choose_expr(const_exp,exp1,exp2)</code> return <code>exp1</code> if <code>const_exp</code> is none zero, <code>exp2</code> otherwise.
+According to [typeof](#__typedefexp--typedefexp--typeofexp), [__builtin_types_compatible_p](#int-__builtin_types_compatible_ptype1-type2) and [__builtin_choose_expr](#type-__builtin_choose_exprconst_expexp1exp2) we can figure out the logic of choosing type for <code>tloc</code>.
 
 Now the problem would be to figure out the type of <code>__kernel_old_time_t __user *</code>, thus we found the following definition:
-
+<a id='bkmk17'></a>
 ```c
 // include/uapi/asm-generic/posix_types.h:89
 typedef __kernel_long_t	__kernel_old_time_t;
@@ -1808,6 +2096,8 @@ find ~/OneDrive -type f -print0 | xargs -0 -P 8 grep -n "DESCRIPTION"
 This command find all files that containning string of "DESCRIPTION" under directory of <code>~/OneDrive</code>
 # gcc
 
+## Format
+
 Format as
 
 ```shell
@@ -1824,3 +2114,20 @@ gcc [options] <source files>
 | <code>-z muldefs</code>     | Allow multiple definition                                                                                                                     |
 | <code>-s</code>             | Remove all symbol table and relocation information from the executable.                                                                       |
 | <code>-D</code>             | Provide command line macro definition e.g. <code>-D 'DEV_PATH="/dev/demo"'</code> same as <code>#define DEV_PATH "/dev/demo"</code> in C code |
+| <code>-E</code>             | Output pre-process file (switch define and others) |
+
+## build-in function
+
+### __typedef(exp) & __typedef__(exp) & typeof(exp)
+
+According to [this post](https://stackoverflow.com/questions/14877415/difference-between-typeof-typeof-and-typeof-in-objective-c#:~:text=3%20Answers&text=__typeof__()%20and%20__typeof,not%20include%20such%20an%20operator.&text=typeof()%20is%20exactly%20the,every%20modern%20compiler%20supports%20it.) it is equivalent for <code>typedef</code>, <code>__typedef</code> and <code>_\_typedef\_\_</code>.
+
+It returns the type of <code>exp</code>.
+
+### int __builtin_types_compatible_p(type1, type2)
+
+This function return 1 if type1 is same as type2, 0 otherwise.
+
+### type __builtin_choose_expr(const_exp,exp1,exp2)
+
+This function return <code>exp1</code> if <code>const_exp</code> is none zero, <code>exp2</code> otherwise.

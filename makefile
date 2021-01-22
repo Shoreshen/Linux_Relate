@@ -12,9 +12,7 @@ run_myfs: CFLAGS = -static -o
 dbg_busy: QMEUFL = $(QFLAGS) -S -s
 dbg_myfs: QMEUFL = $(QFLAGS) -S -s
 dbg_myfs: CFLAGS = -static -g -o
-test:
-	@echo $(BUSY_BRANCH)
-	@echo $(LINUX_BRANCH)
+
 # linux ========================================================================================
 linux_clean:
 	-make -C ./linux mrproper
@@ -23,6 +21,19 @@ linux/.config:
 	make -C ./linux ARCH=x86_64 menuconfig
 linux/arch/x86/boot/bzImage:linux/.config
 	make -C ./linux -j16
+linux_E:
+	@echo "Please type in directory of target *.c file: "; \
+	read dir; \
+	gcc -I ./linux/arch/x86/include \
+		-I ./linux/arch/x86/include/uapi \
+		-I ./linux/arch/x86/include/generated \
+		-I ./linux/arch/x86/include/generated/uapi \
+		-I ./linux/include \
+		-I ./linux/include/uapi \
+		-I ./linux/include/generated/uapi \
+		-include ./linux/include/linux/kconfig.h \
+		-E $$dir \
+		-o trg.E;
 # busybox ======================================================================================
 busy_clean:
 	echo $(PW) | sudo -S make -C ./busybox mrproper
@@ -101,6 +112,6 @@ sync: commit
 	git push -u origin master
 # General ======================================================================================
 clean:
-	-rm -rf init *.s
+	-rm -rf init *.s *.E
 	-rm rootfs.ext3 rootfs.img.gz rootfs
 	-make -C ./Driver clean
