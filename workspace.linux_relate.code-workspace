@@ -55,7 +55,8 @@
 			"ioctl.h": "c",
 			"ctime": "c",
 			"limits": "c",
-			"numeric": "c"
+			"numeric": "c",
+			"processor-flags.h": "c"
 		},
 		"cSpell.words": [
 			"Blockdevices",
