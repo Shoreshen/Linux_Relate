@@ -1,3 +1,4 @@
+PHONY = 
 PW     = $(shell cat ~/文档/PW)
 QFLAGS = -machine q35 -cpu EPYC -smp 4 -m 8G -serial stdio -net nic -net user
 BUSY_BRANCH = $(shell cd busybox && git rev-parse --abbrev-ref HEAD)
@@ -34,6 +35,7 @@ linux_E:
 		-include ./linux/include/linux/kconfig.h \
 		-E $$dir \
 		-o trg.E;
+PHONY += linux_clean linux/.config linux_E
 # busybox ======================================================================================
 busy_clean:
 	echo $(PW) | sudo -S make -C ./busybox mrproper
@@ -43,8 +45,9 @@ _install: busybox busybox/.config # Arch doesn't provide glibc-static, use docke
 	-rm -rf _install
 	docker run --rm -v `pwd`:/io manylinux-shore sh -c "cd /io/busybox && make -j16 && make && make CONFIG_PREFIX=../_install  install"
 	echo $(PW) | sudo -S chmod -Rf 777 _install
+PHONY += busy_clean
 # filesys ======================================================================================
-_install/dev:|_install
+_install/dev:|_install # Order-only-prerequisites
 	mkdir $@
 _install/etc:|_install
 	mkdir $@
@@ -96,6 +99,7 @@ run_myfs: linux/arch/x86/boot/bzImage rootfs
 	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^)
 dbg_myfs: linux/arch/x86/boot/bzImage rootfs
 	qemu-system-x86_64 $(QMEUFL) -kernel $(word 1,$^) -initrd $(word 2,$^) -append "nokaslr"
+PHONY += run_busy dbg_busy run_myfs dbg_myfs
 # GitHub =======================================================================================
 sub_init:
 	git submodule update --init --recursive
@@ -110,8 +114,12 @@ commit: clean
 	git commit -m"$$comment"
 sync: commit
 	git push -u origin master
+PHONY += sub_init sub_pull commit sync
 # General ======================================================================================
 clean:
 	-rm -rf init *.s *.E
 	-rm rootfs.ext3 rootfs.img.gz rootfs
 	-make -C ./Driver clean
+PHONY += clean
+
+.PHONY: $(PHONY)
