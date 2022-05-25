@@ -1,5 +1,5 @@
 .vscode-ctags
-
+.vscode/
 /busybox/_install
 GPATH
 GRTAGS
