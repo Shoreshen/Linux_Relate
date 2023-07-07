@@ -43,7 +43,7 @@ busybox/.config:
 	make -C ./busybox menuconfig
 _install: busybox busybox/.config # Arch doesn't provide glibc-static, use docker to compile
 	-rm -rf _install
-	docker run --rm -v `pwd`:/io manylinux-shore sh -c "cd /io/busybox && make -j16 && make && make CONFIG_PREFIX=../_install  install"
+	cd ./busybox && make -j16 && make && make CONFIG_PREFIX=../_install  install
 	echo $(PW) | sudo -S chmod -Rf 777 _install
 PHONY += busy_clean
 # filesys ======================================================================================
